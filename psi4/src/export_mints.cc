@@ -1302,7 +1302,11 @@ void export_mints(py::module& m) {
         .def("shells_iterator", &IntegralFactory::shells_iterator_ptr,
              "Returns an ERI iterator object, only coded for standard ERIs")
         .def("eri", &IntegralFactory::eri, "Returns an ERI integral object", "deriv"_a = 0, "use_shell_pairs"_a = true, "needs_exchange"_a = false)
-        .def("f12", &IntegralFactory::f12, "Returns an F12 integral object", "cf"_a, "deriv"_a = 0,
+        .def("f12_stg", &IntegralFactory::f12_stg, "Returns an F12 STG integral object", "zeta"_a,
+             "deriv"_a = 0, "use_shell_pairs"_a = true)
+	.def("f12", &IntegralFactory::f12, "Returns an F12 integral object", "cf"_a, "deriv"_a = 0,
+             "use_shell_pairs"_a = true)
+        .def("f12", &IntegralFactory::f12_libint2, "Returns an F12 integral object (Libint2)", "cgtg_params"_a, "deriv"_a = 0,
              "use_shell_pairs"_a = true)
         .def("f12g12", &IntegralFactory::f12g12, "Returns an F12G12 integral object", "cf"_a, "deriv"_a = 0,
              "use_shell_pairs"_a = true)
@@ -1374,8 +1378,16 @@ void export_mints(py::module& m) {
     typedef SharedMatrix (MintsHelper::*normal_3c)(std::shared_ptr<BasisSet>, std::shared_ptr<BasisSet>,
                                                    std::shared_ptr<BasisSet>);
 
+    typedef SharedMatrix (MintsHelper::*normal_f12_stg)(double, std::shared_ptr<IntegralFactory>);
+    typedef SharedMatrix (MintsHelper::*normal_f12_stg2)(double, std::shared_ptr<BasisSet>, std::shared_ptr<BasisSet>,
+                                                     std::shared_ptr<BasisSet>, std::shared_ptr<BasisSet>);
+
     typedef SharedMatrix (MintsHelper::*normal_f12)(std::shared_ptr<CorrelationFactor>);
     typedef SharedMatrix (MintsHelper::*normal_f122)(std::shared_ptr<CorrelationFactor>, std::shared_ptr<BasisSet>,
+                                                     std::shared_ptr<BasisSet>, std::shared_ptr<BasisSet>,
+                                                     std::shared_ptr<BasisSet>);
+    typedef SharedMatrix (MintsHelper::*normal_f12_libint2)(std::vector<std::pair<double,double>>);
+    typedef SharedMatrix (MintsHelper::*normal_f122_libint2)(std::vector<std::pair<double,double>>, std::shared_ptr<BasisSet>,
                                                      std::shared_ptr<BasisSet>, std::shared_ptr<BasisSet>,
                                                      std::shared_ptr<BasisSet>);
 
@@ -1467,8 +1479,13 @@ void export_mints(py::module& m) {
         .def("ao_eri", normal_eri2(&MintsHelper::ao_eri), "AO ERI integrals", "bs1"_a, "bs2"_a, "bs3"_a, "bs4"_a)
         .def("ao_eri_shell", &MintsHelper::ao_eri_shell, "AO ERI Shell", "M"_a, "N"_a, "P"_a, "Q"_a)
         .def("ao_erf_eri", &MintsHelper::ao_erf_eri, "AO ERF integrals", "omega"_a, "factory"_a = nullptr)
+        .def("ao_f12_stg", normal_f12_stg(&MintsHelper::ao_f12_stg), "AO F12 STG integrals", "zeta"_a, "factory"_a = nullptr)
+        .def("ao_f12_stg", normal_f12_stg2(&MintsHelper::ao_f12_stg), "AO F12 STG integrals", "zeta"_a, "bs1"_a, "bs2"_a, "bs3"_a, "bs4"_a)
         .def("ao_f12", normal_f12(&MintsHelper::ao_f12), "AO F12 integrals", "corr"_a)
         .def("ao_f12", normal_f122(&MintsHelper::ao_f12), "AO F12 integrals", "corr"_a, "bs1"_a, "bs2"_a, "bs3"_a,
+             "bs4"_a)
+        .def("ao_f12", normal_f12_libint2(&MintsHelper::ao_f12), "AO F12 integrals", "ctg_params"_a)  
+        .def("ao_f12", normal_f122_libint2(&MintsHelper::ao_f12), "AO F12 integrals", "ctg_params"_a, "bs1"_a, "bs2"_a, "bs3"_a,
              "bs4"_a)
         .def("ao_f12_scaled", normal_f12(&MintsHelper::ao_f12_scaled), "AO F12 intgerals", "corr"_a)
         .def("ao_f12_scaled", normal_f122(&MintsHelper::ao_f12_scaled), "AO F12 intgerals", "corr"_a, "bs1"_a, "bs2"_a,

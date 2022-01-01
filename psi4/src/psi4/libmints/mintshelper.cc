@@ -897,6 +897,24 @@ SharedMatrix MintsHelper::ao_erfc_eri(double omega) {
     return ao_helper("AO ERFC ERI Tensor", ints);
 }
 
+SharedMatrix MintsHelper::ao_f12_stg(double zeta, std::shared_ptr<IntegralFactory> input_factory) {
+    std::shared_ptr<IntegralFactory> factory;
+    if (input_factory) {
+        factory = input_factory;
+    } else {
+        factory = integral_;
+    }
+    return ao_helper("AO F12 STG Tensor", std::shared_ptr<TwoBodyAOInt>(factory->f12_stg(zeta)));
+}
+
+SharedMatrix MintsHelper::ao_f12_stg(double zeta, std::shared_ptr<BasisSet> bs1, std::shared_ptr<BasisSet> bs2,
+                                 std::shared_ptr<BasisSet> bs3, std::shared_ptr<BasisSet> bs4) {
+    IntegralFactory intf(bs1, bs2, bs3, bs4);
+    std::shared_ptr<TwoBodyAOInt> ints(intf.f12_stg(zeta));
+    return ao_helper("AO F12 STG Tensor", ints);
+}
+
+/// Libint1
 SharedMatrix MintsHelper::ao_f12(std::shared_ptr<CorrelationFactor> corr) {
     std::shared_ptr<TwoBodyAOInt> ints(integral_->f12(corr));
     return ao_helper("AO F12 Tensor", ints);
@@ -907,6 +925,19 @@ SharedMatrix MintsHelper::ao_f12(std::shared_ptr<CorrelationFactor> corr, std::s
                                  std::shared_ptr<BasisSet> bs4) {
     IntegralFactory intf(bs1, bs2, bs3, bs4);
     std::shared_ptr<TwoBodyAOInt> ints(intf.f12(corr));
+    return ao_helper("AO F12 Tensor", ints);
+}
+
+/// Libint2
+SharedMatrix MintsHelper::ao_f12(std::vector<std::pair<double,double>> ctg_params) {
+    std::shared_ptr<TwoBodyAOInt> ints(integral_->f12_libint2(ctg_params));
+    return ao_helper("AO F12 Tensor", ints);
+}
+
+SharedMatrix MintsHelper::ao_f12(std::vector<std::pair<double,double>> ctg_params, std::shared_ptr<BasisSet> bs1, std::shared_ptr<BasisSet> bs2,
+                                 std::shared_ptr<BasisSet> bs3, std::shared_ptr<BasisSet> bs4) {
+    IntegralFactory intf(bs1, bs2, bs3, bs4);
+    std::shared_ptr<TwoBodyAOInt> ints(intf.f12_libint2(ctg_params));
     return ao_helper("AO F12 Tensor", ints);
 }
 

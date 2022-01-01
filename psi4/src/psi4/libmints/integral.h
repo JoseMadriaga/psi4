@@ -499,8 +499,13 @@ class PSI_API IntegralFactory {
     /// Returns an erf complement ERI integral object (omega integral)
     virtual TwoBodyAOInt* erf_complement_eri(double omega, int deriv = 0, bool use_shell_pairs = true, bool needs_exchange = false);
 
+    // Returns an F12 integral object
+    virtual TwoBodyAOInt* f12_stg(double zeta, int deriv = 0, bool use_shell_pairs = true);
+
     /// Returns an F12 integral object
     virtual TwoBodyAOInt* f12(std::shared_ptr<CorrelationFactor> cf, int deriv = 0, bool use_shell_pairs = true);
+    /// Returns an F12 integral object (Libint2)
+    virtual TwoBodyAOInt* f12_libint2(std::vector<std::pair<double,double>> ctg_params, int deriv = 0, bool use_shell_pairs = true);
 
     /// Returns an F12Scaled integral object
     virtual TwoBodyAOInt* f12_scaled(std::shared_ptr<CorrelationFactor> cf, int deriv = 0, bool use_shell_pairs = true);
