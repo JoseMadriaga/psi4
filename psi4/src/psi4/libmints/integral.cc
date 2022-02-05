@@ -281,6 +281,13 @@ TwoBodyAOInt* IntegralFactory::f12_libint2(std::vector<std::pair<double,double>>
      else throw PSIEXCEPTION("F12 ERIs with ctg_params are only available in the Libint2 Package");	
 }
 
+TwoBodyAOInt* IntegralFactory::f12g12_libint2(std::vector<std::pair<double,double>> ctg_params, int deriv, bool use_shell_pairs) {
+     auto integral_package = Process::environment.options.get_str("INTEGRAL_PACKAGE");
+     auto threshold = Process::environment.options.get_double("INTS_TOLERANCE");
+     if (integral_package == "LIBINT2") return new Libint2F12G12(ctg_params, this, threshold, deriv, use_shell_pairs);
+     else throw PSIEXCEPTION("F12G12 ERIs with ctg_params are only available in the Libint2 Package");
+}
+
 TwoBodyAOInt* IntegralFactory::f12_scaled(std::shared_ptr<CorrelationFactor> cf, int deriv, bool use_shell_pairs) {
 #ifdef ENABLE_Libint1t
     return new F12Scaled(cf, this, deriv, use_shell_pairs);

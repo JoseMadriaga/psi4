@@ -1310,6 +1310,8 @@ void export_mints(py::module& m) {
              "use_shell_pairs"_a = true)
         .def("f12g12", &IntegralFactory::f12g12, "Returns an F12G12 integral object", "cf"_a, "deriv"_a = 0,
              "use_shell_pairs"_a = true)
+        .def("f12g12", &IntegralFactory::f12g12_libint2, "Returns an F12G12 integral object (Libint2)", "cgtg_params"_a, "deriv"_a = 0,
+             "use_shell_pairs"_a = true)
         .def("f12_double_commutator", &IntegralFactory::f12_double_commutator,
              "Returns an F12 double commutator integral object", "cf"_a, "deriv"_a = 0, "use_shell_pairs"_a = true)
         .def("f12_squared", &IntegralFactory::f12_squared, "Returns an F12 squared integral object", "cf"_a,
@@ -1391,6 +1393,11 @@ void export_mints(py::module& m) {
                                                      std::shared_ptr<BasisSet>, std::shared_ptr<BasisSet>,
                                                      std::shared_ptr<BasisSet>);
 
+    typedef SharedMatrix (MintsHelper::*normal_f12g12)(std::shared_ptr<CorrelationFactor>);
+    typedef SharedMatrix (MintsHelper::*normal_f12g12_libint2)(std::vector<std::pair<double,double>>);
+    typedef SharedMatrix (MintsHelper::*normal_f12g122_libint2)(std::vector<std::pair<double,double>>, std::shared_ptr<BasisSet>,
+                                                     std::shared_ptr<BasisSet>, std::shared_ptr<BasisSet>,
+                                                     std::shared_ptr<BasisSet>);
     typedef SharedMatrix (MintsHelper::*oneelectron)();
     typedef SharedMatrix (MintsHelper::*oneelectron_mixed_basis)(std::shared_ptr<BasisSet>, std::shared_ptr<BasisSet>);
     typedef SharedMatrix (MintsHelper::*perturb_grad_options)(SharedMatrix);
@@ -1493,8 +1500,11 @@ void export_mints(py::module& m) {
         .def("ao_f12_squared", normal_f12(&MintsHelper::ao_f12_squared), "AO F12 squared integrals", "corr"_a)
         .def("ao_f12_squared", normal_f122(&MintsHelper::ao_f12_squared), "AO F12 squared integrals", "corr"_a, "bs1"_a,
              "bs2"_a, "bs3"_a, "bs4"_a)
-        .def("ao_f12g12", &MintsHelper::ao_f12g12, "AO F12G12 integrals", "corr"_a)
-        .def("ao_f12_double_commutator", &MintsHelper::ao_f12_double_commutator, "AO F12 double commutator integrals",
+        .def("ao_f12g12", normal_f12g12(&MintsHelper::ao_f12g12), "AO F12G12 integrals", "corr"_a)
+        .def("ao_f12g12", normal_f12g12_libint2(&MintsHelper::ao_f12g12), "AO F12G12 integrals", "ctg_params"_a)
+        .def("ao_f12g12", normal_f12g122_libint2(&MintsHelper::ao_f12g12), "AO F12G12 integrals", "ctg_params"_a, "bs1"_a, "bs2"_a, "bs3"_a,
+             "bs4"_a)
+	.def("ao_f12_double_commutator", &MintsHelper::ao_f12_double_commutator, "AO F12 double commutator integrals",
              "corr"_a)
         .def("ao_3coverlap", normal_eri(&MintsHelper::ao_3coverlap), "3 Center overlap integrals")
         .def("ao_3coverlap", normal_3c(&MintsHelper::ao_3coverlap), "3 Center overlap integrals", "bs1"_a, "bs2"_a,

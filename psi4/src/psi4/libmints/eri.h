@@ -362,6 +362,22 @@ class Libint2F12 : public Libint2TwoElectronInt {
                                      const libint2::Shell &sh4, const libint2::ShellPair *sp12=nullptr, const libint2::ShellPair *sp34=nullptr) override;
 };
 
+class Libint2F12G12 : public Libint2TwoElectronInt {
+    public:
+     Libint2F12G12(std::vector<std::pair<double,double>> cgtg_params, const IntegralFactory* integral, double screening_threshold, int deriv = 0,
+                   bool use_shell_pairs = false);
+     ~Libint2F12G12() override;
+     Libint2F12G12* clone() const override { return new Libint2F12G12(*this); }
+
+    protected:
+     void libint2_wrapper0(const libint2::Shell &sh1, const libint2::Shell &sh2, const libint2::Shell &sh3,
+                                     const libint2::Shell &sh4, const libint2::ShellPair *sp12=nullptr, const libint2::ShellPair *sp34=nullptr) override;
+     void libint2_wrapper1(const libint2::Shell &sh1, const libint2::Shell &sh2, const libint2::Shell &sh3,
+                                     const libint2::Shell &sh4, const libint2::ShellPair *sp12=nullptr, const libint2::ShellPair *sp34=nullptr) override;
+     void libint2_wrapper2(const libint2::Shell &sh1, const libint2::Shell &sh2, const libint2::Shell &sh3,
+                                     const libint2::Shell &sh4, const libint2::ShellPair *sp12=nullptr, const libint2::ShellPair *sp34=nullptr) override;
+};
+
 }  // namespace psi
 
 #endif

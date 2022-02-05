@@ -219,7 +219,7 @@ class PSI_API MintsHelper {
     SharedMatrix ao_erf_eri(double omega, std::shared_ptr<IntegralFactory> = nullptr);
     /// MO ERFC Omega Integrals
     SharedMatrix ao_erfc_eri(double omega);
-    /// AO F12 Integrals with Slater-type geminal (e^(-z*r))
+    /// AO F12 Integrals with Slater-type geminal (e^(-z*r12))
     SharedMatrix ao_f12_stg(double zeta, std::shared_ptr<IntegralFactory> = nullptr);
     SharedMatrix ao_f12_stg(double zeta, std::shared_ptr<BasisSet> bs1,
                         std::shared_ptr<BasisSet> bs2, std::shared_ptr<BasisSet> bs3, std::shared_ptr<BasisSet> bs4); 
@@ -242,8 +242,14 @@ class PSI_API MintsHelper {
     SharedMatrix ao_f12_squared(std::shared_ptr<CorrelationFactor> corr, std::shared_ptr<BasisSet> bs1,
                                 std::shared_ptr<BasisSet> bs2, std::shared_ptr<BasisSet> bs3,
                                 std::shared_ptr<BasisSet> bs4);
-    /// MO F12G12 Integrals
+    /// AO F12G12 Integrals
     SharedMatrix ao_f12g12(std::shared_ptr<CorrelationFactor> corr);
+
+    /// Libint2
+    SharedMatrix ao_f12g12(std::vector<std::pair<double,double>> ctg_params);
+    SharedMatrix ao_f12g12(std::vector<std::pair<double,double>> ctg_params, std::shared_ptr<BasisSet> bs1,
+                        std::shared_ptr<BasisSet> bs2, std::shared_ptr<BasisSet> bs3, std::shared_ptr<BasisSet> bs4);
+ 
     /// MO F12 double commutator Integrals
     SharedMatrix ao_f12_double_commutator(std::shared_ptr<CorrelationFactor> corr);
     /// 3Center overlap integrals

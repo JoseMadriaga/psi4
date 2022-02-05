@@ -516,6 +516,8 @@ class PSI_API IntegralFactory {
 
     /// Returns an F12G12 integral object
     virtual TwoBodyAOInt* f12g12(std::shared_ptr<CorrelationFactor> cf, int deriv = 0, bool use_shell_pairs = true);
+    /// Returns an F12G12 integral object (Libint2)
+    virtual TwoBodyAOInt* f12g12_libint2(std::vector<std::pair<double,double>> ctg_params, int deriv = 0, bool use_shell_pairs = true);
 
     /// Returns an F12 double commutator integral object
     virtual TwoBodyAOInt* f12_double_commutator(std::shared_ptr<CorrelationFactor> cf, int deriv = 0,

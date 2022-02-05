@@ -1026,8 +1026,22 @@ SharedMatrix MintsHelper::ao_3coverlap(std::shared_ptr<BasisSet> bs1, std::share
     return ao_3coverlap_helper("AO 3-Center Overlap Tensor", ints);
 }
 
+// Libint1
 SharedMatrix MintsHelper::ao_f12g12(std::shared_ptr<CorrelationFactor> corr) {
     std::shared_ptr<TwoBodyAOInt> ints(integral_->f12g12(corr));
+    return ao_helper("AO F12G12 Tensor", ints);
+}
+
+/// Libint2
+SharedMatrix MintsHelper::ao_f12g12(std::vector<std::pair<double,double>> ctg_params) {
+    std::shared_ptr<TwoBodyAOInt> ints(integral_->f12g12_libint2(ctg_params));
+    return ao_helper("AO F12G12 Tensor", ints);
+}
+
+SharedMatrix MintsHelper::ao_f12g12(std::vector<std::pair<double,double>> ctg_params, std::shared_ptr<BasisSet> bs1, std::shared_ptr<BasisSet> bs2,
+                                 std::shared_ptr<BasisSet> bs3, std::shared_ptr<BasisSet> bs4) {
+    IntegralFactory intf(bs1, bs2, bs3, bs4);
+    std::shared_ptr<TwoBodyAOInt> ints(intf.f12g12_libint2(ctg_params));
     return ao_helper("AO F12G12 Tensor", ints);
 }
 
