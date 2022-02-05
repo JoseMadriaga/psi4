@@ -522,6 +522,8 @@ class PSI_API IntegralFactory {
     /// Returns an F12 double commutator integral object
     virtual TwoBodyAOInt* f12_double_commutator(std::shared_ptr<CorrelationFactor> cf, int deriv = 0,
                                                 bool use_shell_pairs = true);
+    /// Returns an F12 double commutator integral object (Libint2)
+    virtual TwoBodyAOInt* f12_double_commutator_libint2(std::vector<std::pair<double,double>> ctg_params, int deriv = 0, bool use_shell_pairs = true);
 
     /// Returns a general ERI iterator object for any (P Q | R S) in shells
     AOIntegralsIterator integrals_iterator(int p, int q, int r, int s);

@@ -250,8 +250,14 @@ class PSI_API MintsHelper {
     SharedMatrix ao_f12g12(std::vector<std::pair<double,double>> ctg_params, std::shared_ptr<BasisSet> bs1,
                         std::shared_ptr<BasisSet> bs2, std::shared_ptr<BasisSet> bs3, std::shared_ptr<BasisSet> bs4);
  
-    /// MO F12 double commutator Integrals
+    /// AO F12 double commutator Integrals
     SharedMatrix ao_f12_double_commutator(std::shared_ptr<CorrelationFactor> corr);
+    
+    /// Libint2
+    SharedMatrix ao_f12_double_commutator(std::vector<std::pair<double,double>> ctg_params);
+    SharedMatrix ao_f12_double_commutator(std::vector<std::pair<double,double>> ctg_params, std::shared_ptr<BasisSet> bs1,
+                        std::shared_ptr<BasisSet> bs2, std::shared_ptr<BasisSet> bs3, std::shared_ptr<BasisSet> bs4); 
+
     /// 3Center overlap integrals
     SharedMatrix ao_3coverlap();
     SharedMatrix ao_3coverlap(std::shared_ptr<BasisSet> bs1, std::shared_ptr<BasisSet> bs2,

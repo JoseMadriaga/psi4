@@ -1045,8 +1045,22 @@ SharedMatrix MintsHelper::ao_f12g12(std::vector<std::pair<double,double>> ctg_pa
     return ao_helper("AO F12G12 Tensor", ints);
 }
 
+// Libint1
 SharedMatrix MintsHelper::ao_f12_double_commutator(std::shared_ptr<CorrelationFactor> corr) {
     std::shared_ptr<TwoBodyAOInt> ints(integral_->f12_double_commutator(corr));
+    return ao_helper("AO F12 Double Commutator Tensor", ints);
+}
+
+/// Libint2
+SharedMatrix MintsHelper::ao_f12_double_commutator(std::vector<std::pair<double,double>> ctg_params) {
+    std::shared_ptr<TwoBodyAOInt> ints(integral_->f12_double_commutator_libint2(ctg_params));
+    return ao_helper("AO F12 Double Commutator Tensor", ints);
+}
+
+SharedMatrix MintsHelper::ao_f12_double_commutator(std::vector<std::pair<double,double>> ctg_params, std::shared_ptr<BasisSet> bs1, std::shared_ptr<BasisSet> bs2,
+                                 std::shared_ptr<BasisSet> bs3, std::shared_ptr<BasisSet> bs4) {
+    IntegralFactory intf(bs1, bs2, bs3, bs4);
+    std::shared_ptr<TwoBodyAOInt> ints(intf.f12_double_commutator_libint2(ctg_params));
     return ao_helper("AO F12 Double Commutator Tensor", ints);
 }
 
