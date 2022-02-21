@@ -3,7 +3,7 @@
  *
  * Psi4: an open-source quantum chemistry software package
  *
- * Copyright (c) 2007-2019 The Psi4 Developers.
+ * Copyright (c) 2007-2021 The Psi4 Developers.
  *
  * The copyrights for code used from other parties are included in
  * the corresponding files.
@@ -67,6 +67,30 @@ long int *init_long_int_array(int size) {
         exit(PSI_RETURN_FAILURE);
     }
     memset(array, 0, sizeof(long int) * size);
+    return (array);
+}
+
+/*!
+** init_size_t_array(): Allocates memory for one-D array of size_t of
+**  dimension
+** 'size' and returns pointer to 1st element.  Zeroes all elements.
+**
+** \param size = length of array to allocate
+**
+** Returns: pointer to new array
+**
+** Added by RAK, 2020
+** \ingroup CIOMR
+*/
+PSI_API size_t *init_size_t_array(int size) {
+    size_t *array;
+
+    if ((array = (size_t *)malloc(sizeof(size_t) * size)) == nullptr) {
+        outfile->Printf("init_size_t_array:  trouble allocating memory \n");
+        outfile->Printf("size = %d\n", size);
+        exit(PSI_RETURN_FAILURE);
+    }
+    memset(array, 0, sizeof(size_t) * size);
     return (array);
 }
 }

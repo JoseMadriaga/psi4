@@ -3,7 +3,7 @@
 #
 # Psi4: an open-source quantum chemistry software package
 #
-# Copyright (c) 2007-2019 The Psi4 Developers.
+# Copyright (c) 2007-2021 The Psi4 Developers.
 #
 # The copyrights for code used from other parties are included in
 # the corresponding files.
@@ -74,7 +74,7 @@ _qcschema_translation = {
     # Generics
     "generics": {
         "return_energy": {"variables": "CURRENT ENERGY"},
-        "nuclear_repulsion_energy": {"variables": "NUCLEAR REPULSION ENERGY"},
+        # "nuclear_repulsion_energy": {"variables": "NUCLEAR REPULSION ENERGY"},  # use mol instead
     },
 
     # Properties
@@ -204,7 +204,7 @@ def _convert_variables(data, context=None, json=False):
             value = var["default"]
 
         # Cast if called
-        if "cast" in var:
+        if (value is not None) and ("cast" in var):
             value = var["cast"](value)
 
         ret[key] = _serial_translation(value, json=json)
@@ -306,12 +306,15 @@ def _convert_wavefunction(wfn, context=None):
                 arr = arr[ao_map[:, None]]
         return arr
 
-    def re1d(mat):
-        arr = np.array(mat)
-        if reorder:
-            arr = arr[ao_map]
+    # get occupations in orbital-energy ordering
+    def sort_occs(noccpi, epsilon):
+        occs = []
+        for irrep, nocc in enumerate(noccpi):
+            for i, e in enumerate(epsilon[irrep]):
+                occs.append((e, int(i < nocc)))
 
-        return arr
+        occs.sort(key = lambda x : x[0])
+        return np.array([occ[1] for occ in occs])
 
     # Map back out what we can
     ret = {
@@ -321,7 +324,7 @@ def _convert_wavefunction(wfn, context=None):
         # Return results
         "orbitals_a": "scf_orbitals_a",
         "orbitals_b": "scf_orbitals_b",
-        "density_a": "scf_density_ba",
+        "density_a": "scf_density_a",
         "density_b": "scf_density_b",
         "fock_a": "scf_fock_a",
         "fock_b": "scf_fock_b",
@@ -339,10 +342,10 @@ def _convert_wavefunction(wfn, context=None):
         "scf_density_b": re2d(wfn.Db_subset("AO")),
         "scf_fock_a": re2d(wfn.Fa_subset("AO")),
         "scf_fock_b": re2d(wfn.Fa_subset("AO")),
-        "scf_eigenvalues_a": re1d(wfn.epsilon_a_subset("AO", "ALL")),
-        "scf_eigenvalues_b": re1d(wfn.epsilon_b_subset("AO", "ALL")),
-        # "scf_occupations_a": np.hstack(wfn.occupation_a().nph),
-        # "scf_occupations_b": np.hstack(wfn.occupation_b().nph),
+        "scf_eigenvalues_a": wfn.epsilon_a_subset("AO", "ALL"),
+        "scf_eigenvalues_b": wfn.epsilon_b_subset("AO", "ALL"),
+        "scf_occupations_a": sort_occs((wfn.doccpi() + wfn.soccpi()).to_tuple(), wfn.epsilon_a().nph),
+        "scf_occupations_b": sort_occs(wfn.doccpi().to_tuple(), wfn.epsilon_b().nph),
     }
 
     return ret
@@ -605,6 +608,7 @@ def run_json_qcschema(json_data, clean, json_serialization, keep_wfn=False):
         "calcinfo_nalpha": wfn.nalpha(),
         "calcinfo_nbeta": wfn.nbeta(),
         "calcinfo_natom": mol.geometry().shape[0],
+        "nuclear_repulsion_energy": mol.nuclear_repulsion_energy(),  # use this b/c psivar is monomer for SAPT
     }
     props.update(_convert_variables(psi_props, context="generics", json=json_serialization))
     if not list(set(['CBS NUMBER', 'NBODY NUMBER', 'FINDIF NUMBER']) & set(json_data["extras"]["qcvars"].keys())):

@@ -3,7 +3,7 @@
  *
  * Psi4: an open-source quantum chemistry software package
  *
- * Copyright (c) 2007-2019 The Psi4 Developers.
+ * Copyright (c) 2007-2021 The Psi4 Developers.
  *
  * The copyrights for code used from other parties are included in
  * the corresponding files.
@@ -47,7 +47,6 @@ void IntegralTransform::common_initialize() {
     bbIntName_ = "";
 
     keepHtInts_ = false;
-    buildMOFock_ = true;
 
     nTriSo_ = nso_ * (nso_ + 1) / 2;
     nTriMo_ = nmo_ * (nmo_ + 1) / 2;

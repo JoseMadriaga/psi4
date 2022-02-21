@@ -3,7 +3,7 @@
  *
  * Psi4: an open-source quantum chemistry software package
  *
- * Copyright (c) 2007-2019 The Psi4 Developers.
+ * Copyright (c) 2007-2021 The Psi4 Developers.
  *
  * The copyrights for code used from other parties are included in
  * the corresponding files.
@@ -57,7 +57,9 @@ void export_oeprop(py::module &m) {
         m, "ESPPropCalc", "ESPPropCalc gives access to routines calculating the ESP on a grid")
         .def(py::init<std::shared_ptr<Wavefunction> >())
         .def("compute_esp_over_grid_in_memory", &ESPPropCalc::compute_esp_over_grid_in_memory,
-             "Computes ESP on specified grid Nx3 (as SharedMatrix)");
+             "Computes ESP on specified grid Nx3 (as SharedMatrix)")
+        .def("compute_field_over_grid_in_memory", &ESPPropCalc::compute_field_over_grid_in_memory,
+             "Computes field on specified grid Nx3 (as SharedMatrix)");
 
     py::class_<OEProp, std::shared_ptr<OEProp>, TaskListComputer>(m, "OEProp", "docstring")
         .
@@ -65,9 +67,8 @@ void export_oeprop(py::module &m) {
         def(py::init<std::shared_ptr<Wavefunction> >())
         .def("add", &OEProp::oepy_add, "docstring")
         .def("compute", &OEProp::oepy_compute, "docstring")
-        .
         //        def("set_title", &OEProp::set_title, "docstring").
-        def("clear", &OEProp::clear, "docstring")
+        .def("clear", &OEProp::clear, "docstring")
         .def("set_Da_ao", &OEProp::set_Da_ao, "docstring", "Da"_a, "symmetry"_a = 0)
         .def("set_Db_ao", &OEProp::set_Db_ao, "docstring", "Db"_a, "symmetry"_a = 0)
         .def("set_Da_so", &OEProp::set_Da_so, "docstring")

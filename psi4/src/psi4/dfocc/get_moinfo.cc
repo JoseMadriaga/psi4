@@ -3,7 +3,7 @@
  *
  * Psi4: an open-source quantum chemistry software package
  *
- * Copyright (c) 2007-2019 The Psi4 Developers.
+ * Copyright (c) 2007-2021 The Psi4 Developers.
  *
  * The copyrights for code used from other parties are included in
  * the corresponding files.
@@ -134,7 +134,7 @@ void DFOCC::get_moinfo() {
         }
 
         // Read orbital coefficients from reference_wavefunction
-        Ca_ = SharedMatrix(reference_wavefunction_->Ca());
+        Ca_ = reference_wavefunction_->Ca()->clone();
         CmoA = SharedTensor2d(new Tensor2d("Alpha MO Coefficients", nso_, nmo_));
         CmoA->set(Ca_);
         if (orb_opt_ == "TRUE" || qchf_ == "TRUE") {
@@ -317,12 +317,12 @@ void DFOCC::get_moinfo() {
         }
 
         // Read orbital coefficients from reference_wavefunction
-        Ca_ = SharedMatrix(reference_wavefunction_->Ca());
+        Ca_ = reference_wavefunction_->Ca()->clone();
         CmoA = SharedTensor2d(new Tensor2d("Alpha MO Coefficients", nso_, nmo_));
         CmoA->set(Ca_);
         if (print_ > 2) CmoA->print();
 
-        Cb_ = SharedMatrix(reference_wavefunction_->Cb());
+        Cb_ = reference_wavefunction_->Cb()->clone();
         CmoB = SharedTensor2d(new Tensor2d("Beta MO Coefficients", nso_, nmo_));
         CmoB->set(Cb_);
         if (orb_opt_ == "TRUE" || qchf_ == "TRUE") {

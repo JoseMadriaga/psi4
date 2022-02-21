@@ -3,7 +3,7 @@
  *
  * Psi4: an open-source quantum chemistry software package
  *
- * Copyright (c) 2007-2019 The Psi4 Developers.
+ * Copyright (c) 2007-2021 The Psi4 Developers.
  *
  * The copyrights for code used from other parties are included in
  * the corresponding files.
@@ -149,8 +149,7 @@ int read_options(const std::string &name, Options &options, bool suppress_printi
     options.add_bool("DIE_IF_NOT_CONVERGED", true);
     /*- Integral package to use. If compiled with ERD or Simint support, change this option to use them; LibInt is used
        otherwise. -*/
-    options.add_str("INTEGRAL_PACKAGE", "LIBINT", "ERD LIBINT SIMINT");
-    
+    options.add_str("INTEGRAL_PACKAGE", "LIBINT2", "ERD LIBINT1 SIMINT LIBINT2");
 #ifdef USING_BrianQC
     /*- Whether to enable using the BrianQC GPU module -*/
     options.add_bool("BRIANQC_ENABLE", false);
@@ -184,7 +183,8 @@ int read_options(const std::string &name, Options &options, bool suppress_printi
     See :ref:`Cross-module Redundancies <table:managedmethods>` for details. -*/
     options.add_str("MP2_TYPE", "DF", "DF CONV CD");
     /*- Algorithm to use for MPn ( $n>2$ ) computation (e.g., MP3 or MP2.5 or MP4(SDQ)).
-    See :ref:`Cross-module Redundancies <table:managedmethods>` for details. -*/
+    See :ref:`Cross-module Redundancies <table:managedmethods>` for details.
+    Since v1.4, default for non-orbital-optimized MP2.5 and MP3 is DF. -*/
     options.add_str("MP_TYPE", "CONV", "DF CONV CD");
     // The type of integrals to use in coupled cluster computations. DF activates density fitting for the largest
     // integral files, while CONV results in no approximations being made.
@@ -252,8 +252,28 @@ int read_options(const std::string &name, Options &options, bool suppress_printi
     /*- How many NOONS to print -- used in libscf_solver/uhf.cc and libmints/oeprop.cc -*/
     options.add_str("PRINT_NOONS", "3");
 
+    ///MBIS Options (libmints/oeprop.cc)
+
+    /*- Maximum Number of MBIS Iterations -*/
+    options.add_int("MBIS_MAXITER", 500);
+    /*- MBIS Convergence Criteria -*/
+    options.add_double("MBIS_D_CONVERGENCE", 1.0e-8);
+    /*- MBIS Number of Radial Points -*/
+    /*- Additional Radial and/or Spherical Points may be needed for Heavier Atoms (200-300) like Zinc -*/
+    options.add_int("MBIS_RADIAL_POINTS", 75);
+    /*- MBIS Number of Spherical Points -*/
+    options.add_int("MBIS_SPHERICAL_POINTS", 302);
+    /*- Pruning scheme for MBIS Grid -*/
+    options.add_str("MBIS_PRUNING_SCHEME", "ROBUST", 
+                    "ROBUST TREUTLER NONE FLAT P_GAUSSIAN D_GAUSSIAN P_SLATER D_SLATER LOG_GAUSSIAN LOG_SLATER NONE");
+    /*- Maximum Radial Moment to Calculate -*/
+    options.add_int("MAX_RADIAL_MOMENT", 4);
+
     /*- PCM boolean for pcmsolver module -*/
     options.add_bool("PCM", false);
+    /*- PE boolean for polarizable embedding module -*/
+    options.add_bool("PE", false);
+
     if (name == "PCM" || options.read_globals()) {
         /*- MODULEDESCRIPTION Performs polarizable continuum model (PCM) computations. -*/
 
@@ -265,12 +285,10 @@ int read_options(const std::string &name, Options &options, bool suppress_printi
         options.add_str("PCM_CC_TYPE", "PTE", "PTE");
     }
 
-    /*- PE boolean for polarizable embedding module -*/
-    options.add_bool("PE", false);
     if (name == "PE" || options.read_globals()) {
         /*- MODULEDESCRIPTION Performs polarizable embedding model (PE) computations. -*/
 
-        /*- Name of the potential file -*/
+        /*- Name of the potential file OR contents of potential file to be written anonymously on-the-fly. -*/
         options.add_str_i("POTFILE", "potfile.pot");
         /*- Threshold for induced moments convergence -*/
         options.add_double("INDUCED_CONVERGENCE", 1e-8);
@@ -286,6 +304,13 @@ int read_options(const std::string &name, Options &options, bool suppress_printi
         options.add_double("DAMPING_FACTOR_INDUCED", 2.1304);
         /*- Thole damping factor for multipole fields -*/
         options.add_double("DAMPING_FACTOR_MULTIPOLE", 2.1304);
+
+        /*- Summation scheme for field computations, can be direct or fmm -*/
+        options.add_str_i("SUMMATION_FIELDS", "DIRECT", "DIRECT FMM");
+        /*- Expansion order of the multipoles for FMM -*/
+        options.add_int("TREE_EXPANSION_ORDER", 5);
+        /*- Opening angle theta -*/
+        options.add_double("TREE_THETA", 0.5);
 
         /*- Activate border options for sites in proximity to the QM/MM border -*/
         options.add_bool("BORDER", false);
@@ -305,6 +330,9 @@ int read_options(const std::string &name, Options &options, bool suppress_printi
         options.add_int("BORDER_N_REDIST", -1);
         /*- redistribute polarizabilities? If false, polarizabilities are removed (default) -*/
         options.add_bool("BORDER_REDIST_POL", false);
+
+        /*- use PE(ECP) repulsive potentials -*/
+        options.add_bool("PE_ECP", false);
     }
 
     if (name == "DETCI" || options.read_globals()) {
@@ -959,7 +987,7 @@ int read_options(const std::string &name, Options &options, bool suppress_printi
         /*- Do use Combined Schwarz Approximation Maximum (CSAM) screening on
         two-electron integrals. This is a slightly tighter bound than that of
         default Schwarz screening. -*/
-        options.add_str("SCREENING", "SCHWARZ" "SCHWARZ CSAM");
+        options.add_str("SCREENING", "CSAM", "SCHWARZ CSAM");
         /*- Memory safety -*/
         options.add_double("SAPT_MEM_SAFETY", 0.9);
         /*- Do force SAPT2 and higher to die if it thinks there isn't enough
@@ -996,14 +1024,23 @@ int read_options(const std::string &name, Options &options, bool suppress_printi
 
         /*- SUBSECTION SAPT(DFT) -*/
 
-        /*- How is the GRAC correction determined? -*/
-        options.add_str("SAPT_DFT_GRAC_DETERMINATION", "INPUT", "INPUT");
-        /*- Monomer A GRAC shift? -*/
+        /*- Monomer A GRAC shift in Hartree -*/
         options.add_double("SAPT_DFT_GRAC_SHIFT_A", 0.0);
-        /*- Monomer B GRAC shift? -*/
+        /*- Monomer B GRAC shift in Hartree -*/
         options.add_double("SAPT_DFT_GRAC_SHIFT_B", 0.0);
         /*- Compute the Delta-HF correction? -*/
         options.add_bool("SAPT_DFT_DO_DHF", true);
+        /*- How is the GRAC correction determined? !expert -*/
+        options.add_str("SAPT_DFT_GRAC_DETERMINATION", "INPUT", "INPUT");
+        /*- Enables the hybrid xc kernel in dispersion? !expert -*/
+        options.add_bool("SAPT_DFT_DO_HYBRID", true);
+        /*- Scheme for approximating exchange-dispersion for SAPT-DFT.
+        ``NONE`` Use unscaled ``Exch-Disp2,u`` .
+        ``FIXED`` Use a fixed factor |sapt__sapt_dft_exch_disp_fixed_scale| to scale ``Exch-Disp2,u`` .
+        ``DISP`` Use the ratio of ``Disp2,r`` and ``Disp2,u`` to scale ``Exch-Disp2,u`` . -*/
+        options.add_str("SAPT_DFT_EXCH_DISP_SCALE_SCHEME", "DISP", "NONE FIXED DISP");
+        /*- Exch-disp scaling factor for FIXED scheme for |sapt__sapt_dft_exch_disp_scale_scheme|. Default value of 0.686 suggested by Hesselmann and Korona, J. Chem. Phys. 141, 094107 (2014). !expert -*/
+        options.add_double("SAPT_DFT_EXCH_DISP_FIXED_SCALE", 0.686);
         /*- Underlying funcitonal to use for SAPT(DFT) !expert -*/
         options.add_str("SAPT_DFT_FUNCTIONAL", "PBE0", "");
         /*- Number of points in the Legendre FDDS Dispersion time integration !expert -*/
@@ -1200,11 +1237,6 @@ int read_options(const std::string &name, Options &options, bool suppress_printi
         options.add_str("DCT_FUNCTIONAL", "ODC-12", "DC-06 DC-12 ODC-06 ODC-12 ODC-13 CEPA0");
         /*- Whether to compute three-particle energy correction or not -*/
         options.add_str("THREE_PARTICLE", "NONE", "NONE PERTURBATIVE");
-        /*- Do write a MOLDEN output file?  If so, the filename will end in
-        .molden, and the prefix is determined by |globals__writer_file_label|
-        (if set), or else by the name of the output file plus the name of
-        the current molecule. -*/
-        options.add_bool("MOLDEN_WRITE", false);
         /*- Level shift applied to the diagonal of the density-weighted Fock operator. While this shift can improve
            convergence, it does change the DCT energy. !expert-*/
         options.add_double("ENERGY_LEVEL_SHIFT", 0.0);
@@ -1213,6 +1245,9 @@ int read_options(const std::string &name, Options &options, bool suppress_printi
         /*- Auxiliary basis set for DCT density fitting computations.
         :ref:`Defaults <apdx:basisFamily>` to a RI basis. -*/
         options.add_str("DF_BASIS_DCT", "");
+        /*- Compute a (relaxed) one-particle density matrix? Can be set manually. Set internally for
+         property and gradient computations. -*/
+        options.add_bool("OPDM", false);
     }
     if (name == "GDMA" || options.read_globals()) {
         /*- MODULEDESCRIPTION Performs distributed multipole analysis (DMA), using
@@ -1277,7 +1312,7 @@ int read_options(const std::string &name, Options &options, bool suppress_printi
         options.add_double("CHOLESKY_TOLERANCE", 1e-4);
         /*- Do a density fitting SCF calculation to converge the
             orbitals before switching to the use of exact integrals in
-            a |scf__scf_type| ``DIRECT`` calculation -*/
+            a |globals__scf_type| ``DIRECT`` calculation -*/
         options.add_bool("DF_SCF_GUESS", true);
         /*- Keep JK object for later use? -*/
         options.add_bool("SAVE_JK", false);
@@ -1290,7 +1325,7 @@ int read_options(const std::string &name, Options &options, bool suppress_printi
         /*- Tolerance for partial Cholesky decomposition of overlap matrix. -*/
         options.add_double("S_CHOLESKY_TOLERANCE", 1E-8);
         /*- Schwarz screening threshold. Mininum absolute value below which TEI are neglected. -*/
-        options.add_double("INTS_TOLERANCE", 0.0);
+        options.add_double("INTS_TOLERANCE", 1E-12);
         /*- The type of guess orbitals.  Defaults to ``READ`` for geometry optimizations after the first step, to
           ``CORE`` for single atoms, and to ``SAD`` otherwise. The ``HUCKEL`` guess employs on-the-fly calculations
           like SAD, as described in doi:10.1021/acs.jctc.8b01089 which also describes the SAP guess. -*/
@@ -1609,7 +1644,7 @@ int read_options(const std::string &name, Options &options, bool suppress_printi
         /*- Run with Tamm-Dancoff approximation (TDA), uses random-phase approximation (RPA) when false -*/
         options.add_bool("TDSCF_TDA", false);
         /*- Convergence threshold for the norm of the residual vector. If unset,
-        default based on |globals__d_convergence|. -*/
+        default based on |scf__d_convergence|. -*/
         options.add_double("TDSCF_R_CONVERGENCE", 1E-4);
         /*- Guess type, only 'denominators' currently supported -*/
         options.add_str("TDSCF_GUESS", "DENOMINATORS");
@@ -1618,10 +1653,10 @@ int read_options(const std::string &name, Options &options, bool suppress_printi
         /*- Verbosity level in TDSCF -*/
         options.add_int("TDSCF_PRINT", 1);
 
-        /*- combine omega exchange and Hartree--Fock exchange into 
-              one matrix for efficiency? 
-            Default is True for MemDFJK 
-              (itself the default for |globals__scf_type| DF), 
+        /*- combine omega exchange and Hartree--Fock exchange into
+              one matrix for efficiency?
+            Default is True for MemDFJK
+              (itself the default for |globals__scf_type| DF),
             False otherwise as not yet implemented. -*/
         options.add_bool("WCOMBINE", false);
     }
@@ -1810,17 +1845,27 @@ int read_options(const std::string &name, Options &options, bool suppress_printi
         options.add_str("JOBTYPE", "");
         /*- Do simulate the effects of local correlation techniques? -*/
         options.add_bool("LOCAL", false);
-        /*- Desired treatment of "weak pairs" in the local-CCSD method. The value of ``NONE`` (unique available option)
-        treats weak pairs in the same manner as strong pairs. -*/
-        options.add_str("LOCAL_WEAKP", "NONE");
-        /*- Value (always between one and zero) for the Broughton-Pulay completeness
-        check used to contruct orbital domains for local-CC calculations. See
-        J. Broughton and P. Pulay, J. Comp. Chem. 14, 736-740 (1993) and C. Hampel
-        and H.-J. Werner, J. Chem. Phys. 104, 6286-6297 (1996). -*/
+        /*- Desired treatment of "weak pairs" in the local-CCSD method. The value of ``NONE``
+        treats weak pairs in the same manner as strong pairs. ``NEGLECT`` neglects the
+        contribution of weak pairs while ``MP2`` adds the MP2-level correction to the energy -*/
+        options.add_str("LOCAL_WEAKP", "NONE", "NONE NEGLECT RESPONSE MP2");
+        /*- Value (always between one and zero) of the weak pair
+          threshold for the PNO and PNO++ methods. -*/
+        options.add_double("WEAKP_CUTOFF", 0.02);
+        /*- Value (always between one and zero) of the PNO occupation number
+          threshold for the PNO and PNO++ methods. -*/
         options.add_double("LOCAL_CUTOFF", 0.02);
-        /*- Type of local-CCSD scheme to be simulated. ``WERNER`` (unique available option) selects the method
-        developed by H.-J. Werner and co-workers. -*/
-        options.add_str("LOCAL_METHOD", "WERNER");
+        /*- Type of local-CCSD scheme to be simulated. 
+        ``PNO`` selects the Pair Natural Orbital method
+        developed by Meyer, Ahlrichs, and most recently by Neese and co-workers.
+        ``PNO++`` and ``cPNO++`` selects the Perturbed Pair Natural Orbital methods
+        developed by Crawford and co-workers. -*/
+        options.add_str("LOCAL_METHOD", "PNO", "PNO PNO++ CPNO++");
+        /*- Type of perturbation to use for PNO++ method. -*/
+        options.add_str("LOCAL_PERT", "DIPOLE", "DIPOLE NABLA");
+        /*- Value (always between one and zero) of the PNO occupation number
+          threshold for the cPNO++ method. -*/
+        options.add_double("UNPERT_CUTOFF", 1e-6);
         /*- Do apply local filtering to single de-excitation ($\lambda 1$ amplitudes? -*/
         options.add_bool("LOCAL_FILTER_SINGLES", true);
         /*- Cutoff value for local-coupled-perturbed-Hartree-Fock -*/
@@ -1990,8 +2035,14 @@ int read_options(const std::string &name, Options &options, bool suppress_printi
         options.add_int("VECS_PER_ROOT", 12);
         /*- Vectors stored in CC3 computations -*/
         options.add_int("VECS_CC3", 10);
-        /*- Do collapse with last vector? -*/
+        /*- When collapsing Davidson subspace, whether to also include the
+        previous approximate solution (for each root)? This doubles the
+        number of resulting vectors but generally improves convergence. -*/
         options.add_bool("COLLAPSE_WITH_LAST", true);
+        /*- Has the same effect as "COLLAPSE_WITH_LAST" but only in 
+        CC3 computations and after the initial solution of EOM CCSD.
+        May help efficiency, but hazardous when solving for higher roots. -*/
+        options.add_bool("COLLAPSE_WITH_LAST_CC3", false);
         /*- Complex tolerance applied in CCEOM computations -*/
         options.add_double("COMPLEX_TOLERANCE", 1E-12);
         /*- Convergence criterion for norm of the residual vector in the Davidson algorithm for CC-EOM. -*/
@@ -2056,25 +2107,34 @@ int read_options(const std::string &name, Options &options, bool suppress_printi
         /*- The response property desired.  Acceptable values are ``POLARIZABILITY``
         (default) for dipole polarizabilities, ``ROTATION`` for specific rotations,
         ``ROA`` for Raman Optical Activity (``ROA_TENSOR`` for each displacement),
-        and ``ALL`` for all of the above. -*/
-        options.add_str("PROPERTY", "POLARIZABILITY", "POLARIZABILITY ROTATION ROA ROA_TENSOR ALL");
+        `HYPERPOLARIZABILITY`` for hyperpolarizabilities and ``ALL`` for all of the above. -*/
+        options.add_str("PROPERTY", "POLARIZABILITY", "POLARIZABILITY ROTATION ROA ROA_TENSOR HYPERPOLARIZABILITY ALL"); 
         /*- Type of ABCD algorithm will be used -*/
         options.add_str("ABCD", "NEW");
         /*- Do restart from on-disk amplitudes? -*/
         options.add_bool("RESTART", 1);
         /*- Do simulate local correlation? -*/
         options.add_bool("LOCAL", 0);
-        /*- Value (always between one and zero) for the Broughton-Pulay completeness
-        check used to contruct orbital domains for local-CC calculations. See
-        J. Broughton and P. Pulay, J. Comp. Chem. 14, 736-740 (1993) and C. Hampel
-        and H.-J. Werner, J. Chem. Phys. 104, 6286-6297 (1996). -*/
-        options.add_double("LOCAL_CUTOFF", 0.01);
-        /*- Type of local-CCSD scheme to be simulated. ``WERNER`` (unique available option) selects the method
-        developed by H.-J. Werner and co-workers. -*/
-        options.add_str("LOCAL_METHOD", "WERNER");
+        /*- Value (always between one and zero) of the PNO occupation number
+          threshold for the PNO and PNO++ methods. -*/
+        options.add_double("LOCAL_CUTOFF", 0.02);
+        /*- Type of local-CCSD scheme to be simulated. 
+        ``PNO`` selects the Pair Natural Orbital method
+        developed by Meyer, Ahlrichs, and most recently by Neese and co-workers.
+        ``PNO++`` and ``cPNO++`` selects the Perturbed Pair Natural Orbital methods
+        developed by Crawford and co-workers. -*/
+        options.add_str("LOCAL_METHOD", "PNO PNO++ CPNO++");
+        /*- Type of perturbation to use for PNO++ method. -*/
+        options.add_str("LOCAL_PERT", "NONE", "DIPOLE NABLA");
         /*- Desired treatment of "weak pairs" in the local-CCSD method. The value of ``NONE`` (unique available option)
         treats weak pairs in the same manner as strong pairs. -*/
-        options.add_str("LOCAL_WEAKP", "NONE");
+        options.add_str("LOCAL_WEAKP", "NONE", "NONE NEGLECT MP2");
+        /*- Value (always between one and zero) of the weak pair
+          threshold for the PNO and PNO++ methods. -*/
+        options.add_double("WEAKP_CUTOFF", 1e-4);
+        /*- Value (always between one and zero) of the PNO occupation number
+          threshold for the cPNO++ method. -*/
+        options.add_double("UNPERT_CUTOFF", 1e-6);
         /*- Do apply local filtering to single excitation amplitudes? -*/
         options.add_bool("LOCAL_FILTER_SINGLES", false);
         /*- Cutoff value for local-coupled-perturbed-Hartree-Fock -*/
@@ -2244,25 +2304,34 @@ int read_options(const std::string &name, Options &options, bool suppress_printi
         options.add_str("ABCD", "NEW", "NEW OLD");
         /*- Do simulate the effects of local correlation techniques? -*/
         options.add_bool("LOCAL", 0);
-        /*- Value (always between one and zero) for the Broughton-Pulay completeness
-        check used to contruct orbital domains for local-CC calculations. See
-        J. Broughton and P. Pulay, J. Comp. Chem. 14, 736-740 (1993) and C. Hampel
-        and H.-J. Werner, J. Chem. Phys. 104, 6286-6297 (1996). -*/
+        /*- Value (always between one and zero) of the PNO occupation number
+          threshold for the PNO and PNO++ methods. -*/
         options.add_double("LOCAL_CUTOFF", 0.02);
-        /*- Type of local-CCSD scheme to be simulated. ``WERNER`` selects the method
-        developed by H.-J. Werner and co-workers, and ``AOBASIS`` selects the method
-        developed by G.E. Scuseria and co-workers (currently inoperative). -*/
-        options.add_str("LOCAL_METHOD", "WERNER", "WERNER AOBASIS");
+        /*- Type of local-CCSD scheme to be simulated. /
+        ``PNO`` selects the Pair Natural Orbital method
+        developed by Meyer, Ahlrichs, and most recently by Neese and co-workers.
+        ``PNO++`` and ``cPNO++`` selects the Perturbed Pair Natural Orbital methods
+        developed by Crawford and co-workers. -*/
+        options.add_str("LOCAL_METHOD", "PNO", "PNO PNO++ CPNO++");
         /*- Desired treatment of "weak pairs" in the local-CCSD method. A value of
         ``NEGLECT`` ignores weak pairs entirely. A value of ``NONE`` treats weak pairs in
         the same manner as strong pairs. A value of MP2 uses second-order perturbation
         theory to correct the local-CCSD energy computed with weak pairs ignored. -*/
         options.add_str("LOCAL_WEAKP", "NONE", "NONE NEGLECT MP2");
+        /*- Value (always between one and zero) of the weak pair
+          threshold for the PNO and PNO++ methods. -*/
+        options.add_double("WEAKP_CUTOFF", 1e-4);
         // options.add_int("LOCAL_FILTER_SINGLES", 1);
         /*- Cutoff value for local-coupled-perturbed-Hartree-Fock -*/
         options.add_double("LOCAL_CPHF_CUTOFF", 0.10);
         /*- Definition of local pair domains, default is BP, Boughton-Pulay. -*/
         options.add_str("LOCAL_PAIRDEF", "BP", "BP RESPONSE");
+        /*- Array that specifies the desired frequencies of the incident
+        radiation field in CCLR calculations.  If only one element is
+        given, the units will be assumed to be atomic units.  If more
+        than one element is given, then the units must be specified as the final
+        element of the array.  Acceptable units are ``HZ``, ``NM``, ``EV``, and ``AU``. -*/
+        options.add("OMEGA", new ArrayType());
         /*- Number of important $t@@1$ and $t@@2$ amplitudes to print -*/
         options.add_int("NUM_AMPS_PRINT", 10);
         /*- Convergence criterion for Brueckner orbitals. The convergence is
@@ -2786,7 +2855,7 @@ int read_options(const std::string &name, Options &options, bool suppress_printi
         /*- Do apply DIIS extrapolation? -*/
         options.add_bool("DO_DIIS", true);
         /*- Do compute CC Lambda energy? In order to this option to be valid one should use "TPDM_ABCD_TYPE = COMPUTE"
-         * option. -*/
+        option. -*/
         options.add_bool("CCL_ENERGY", false);
         /*- Do compute OCC poles for ionization potentials? Only valid OMP2. -*/
         options.add_bool("IP_POLES", false);
@@ -2868,8 +2937,11 @@ int read_options(const std::string &name, Options &options, bool suppress_printi
         options.add_double("E3_SCALE", 0.25);
         /*- OO scaling factor used in MSD -*/
         options.add_double("OO_SCALE", 0.01);
-        /*- Convergence criterion for residual vector of preconditioned conjugate gradient method. -*/
-        options.add_double("PCG_CONVERGENCE", 1e-6);
+        /*- Convergence criterion for residual vector of preconditioned conjugate gradient method.
+        If this keyword is not set by the user, DFOCC will estimate and use a value required to achieve
+        |dfocc__r_convergence| residual convergence. The listed default will be used for the default value
+        of |dfocc__r_convergence|. -*/
+        options.add_double("PCG_CONVERGENCE", 1e-7);
         /*- Regularization parameter -*/
         options.add_double("REG_PARAM", 0.4);
         /*- tolerance for Cholesky decomposition of the ERI tensor -*/
@@ -3032,8 +3104,10 @@ int read_options(const std::string &name, Options &options, bool suppress_printi
         options.add_int("DIIS_MAX_VECS", 8);
         /*- Do use low memory option for triples contribution? Note that this
             option is enabled automatically if the memory requirements of the
-            conventional algorithm would exceed the available resources -*/
-        options.add_bool("TRIPLES_LOW_MEMORY", false);
+            conventional algorithm would exceed the available resources.
+            The low memory algorithm is faster in general and has been turned
+            on by default starting September 2020. -*/
+        options.add_bool("TRIPLES_LOW_MEMORY", true);
         /*- Do compute triples contribution? !expert -*/
         options.add_bool("COMPUTE_TRIPLES", true);
         /*- Do compute MP4 triples contribution? !expert -*/

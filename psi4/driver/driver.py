@@ -3,7 +3,7 @@
 #
 # Psi4: an open-source quantum chemistry software package
 #
-# Copyright (c) 2007-2019 The Psi4 Developers.
+# Copyright (c) 2007-2021 The Psi4 Developers.
 #
 # The copyrights for code used from other parties are included in
 # the corresponding files.
@@ -31,12 +31,11 @@ functionality, namely single-point energies, geometry optimizations,
 properties, and vibrational frequency calculations.
 
 """
+import json
 import os
 import re
-import sys
-import copy
-import json
 import shutil
+import sys
 
 import numpy as np
 
@@ -257,7 +256,7 @@ def energy(name, **kwargs):
     +-------------------------+---------------------------------------------------------------------------------------------------------------+
     | pbeh3c                  | PBEh with dispersion, BSSE, and basis set corrections :ref:`[manual] <sec:gcp>`                               |
     +-------------------------+---------------------------------------------------------------------------------------------------------------+
-    | dct                     | density cumulant (functional) theory :ref:`[manual] <sec:dct>`                                                 |
+    | dct                     | density cumulant (functional) theory :ref:`[manual] <sec:dct>`                                                |
     +-------------------------+---------------------------------------------------------------------------------------------------------------+
     | mp2                     | 2nd-order |MollerPlesset| perturbation theory (MP2) :ref:`[manual] <sec:dfmp2>` :ref:`[details] <tlmp2>`      |
     +-------------------------+---------------------------------------------------------------------------------------------------------------+
@@ -453,11 +452,11 @@ def energy(name, **kwargs):
     .. comment mrcc --- this is handled in its own table
     .. comment psimrcc_scf --- convenience fn
 
-    .. include:: ../autodoc_dft_energy.rst
+    .. include:: /autodoc_dft_energy.rst
 
-    .. include:: ../mrcc_table_energy.rst
+    .. include:: /mrcc_table_energy.rst
 
-    .. include:: ../cfour_table_energy.rst
+    .. include:: /cfour_table_energy.rst
 
     :examples:
 
@@ -798,6 +797,9 @@ def properties(*args, **kwargs):
     +--------------------+-----------------------------------------------+----------------+---------------------------------------------------------------+
     | ccsd               | Coupled cluster singles and doubles (CCSD)    | RHF            | dipole, quadrupole, polarizability, rotation, roa_tensor      |
     +--------------------+-----------------------------------------------+----------------+---------------------------------------------------------------+
+    | dct                | density cumulant (functional) theory          | RHF/UHF        | Listed :ref:`here <sec:oeprop>`                               |
+    |                    | :ref:`[manual] <sec:dct>`                     |                |                                                               |
+    +--------------------+-----------------------------------------------+----------------+---------------------------------------------------------------+
     | omp2               | orbital-optimized second-order                | RHF/UHF        | Listed :ref:`here <sec:oeprop>`                               |
     |                    | MP perturbation theory                        |                | Density fitted only                                           |
     |                    | :ref:`[manual] <sec:occ_oo>`                  |                |                                                               |
@@ -1082,7 +1084,7 @@ def optimize(name, **kwargs):
 
     :returns: (*float*, :py:class:`~psi4.core.Wavefunction`) |w--w| energy and wavefunction when **return_wfn** specified.
 
-    :raises: psi4.OptimizationConvergenceError if |optking__geom_maxiter| exceeded without reaching geometry convergence.
+    :raises: psi4.OptimizationConvergenceError if :term:`GEOM_MAXITER <GEOM_MAXITER (OPTKING)>` exceeded without reaching geometry convergence.
 
     :PSI variables:
 
@@ -1166,7 +1168,7 @@ def optimize(name, **kwargs):
     +-------------------------+---------------------------------------------------------------------------------------------------------------+
     | hf                      | HF self consistent field (SCF) :ref:`[manual] <sec:scf>`                                                      |
     +-------------------------+---------------------------------------------------------------------------------------------------------------+
-    | dct                     | density cumulant (functional) theory :ref:`[manual] <sec:dct>`                                                 |
+    | dct                     | density cumulant (functional) theory :ref:`[manual] <sec:dct>`                                                |
     +-------------------------+---------------------------------------------------------------------------------------------------------------+
     | mp2                     | 2nd-order |MollerPlesset| perturbation theory (MP2) :ref:`[manual] <sec:dfmp2>` :ref:`[details] <tlmp2>`      |
     +-------------------------+---------------------------------------------------------------------------------------------------------------+
@@ -1196,9 +1198,9 @@ def optimize(name, **kwargs):
     .. _`table:grad_scf`:
 
 
-    .. include:: ../autodoc_dft_opt.rst
+    .. include:: /autodoc_dft_opt.rst
 
-    .. include:: ../cfour_table_grad.rst
+    .. include:: /cfour_table_grad.rst
 
 
     :examples:
@@ -1832,15 +1834,15 @@ def vibanal_wfn(wfn, hess=None, irrep=None, molecule=None, project_trans=True, p
             E0=core.variable('CURRENT ENERGY'))  # someday, wfn.energy()
         vibrec.update({k: qca.json() for k, qca in therminfo.items()})
 
-        core.set_variable("ZPVE", therminfo['ZPE_corr'].data)
-        core.set_variable("THERMAL ENERGY CORRECTION", therminfo['E_corr'].data)
-        core.set_variable("ENTHALPY CORRECTION", therminfo['H_corr'].data)
-        core.set_variable("GIBBS FREE ENERGY CORRECTION", therminfo['G_corr'].data)
+        core.set_variable("ZPVE", therminfo['ZPE_corr'].data)  # P::e THERMO
+        core.set_variable("THERMAL ENERGY CORRECTION", therminfo['E_corr'].data)  # P::e THERMO
+        core.set_variable("ENTHALPY CORRECTION", therminfo['H_corr'].data)  # P::e THERMO
+        core.set_variable("GIBBS FREE ENERGY CORRECTION", therminfo['G_corr'].data)  # P::e THERMO
 
-        core.set_variable("ZERO K ENTHALPY", therminfo['ZPE_tot'].data)
-        core.set_variable("THERMAL ENERGY", therminfo['E_tot'].data)
-        core.set_variable("ENTHALPY", therminfo['H_tot'].data)
-        core.set_variable("GIBBS FREE ENERGY", therminfo['G_tot'].data)
+        core.set_variable("ZERO K ENTHALPY", therminfo['ZPE_tot'].data)  # P::e THERMO
+        core.set_variable("THERMAL ENERGY", therminfo['E_tot'].data)  # P::e THERMO
+        core.set_variable("ENTHALPY", therminfo['H_tot'].data)  # P::e THERMO
+        core.set_variable("GIBBS FREE ENERGY", therminfo['G_tot'].data)  # P::e THERMO
 
         core.print_out(thermtext)
     else:
@@ -1870,8 +1872,6 @@ def gdma(wfn, datafile=""):
     """Function to use wavefunction information in *wfn* and, if specified,
     additional commands in *filename* to run GDMA analysis.
 
-    .. include:: ../autodoc_abbr_options_c.rst
-
     .. versionadded:: 0.6
 
     :returns: None
@@ -1882,7 +1882,7 @@ def gdma(wfn, datafile=""):
     :type datafile: string
     :param datafile: optional control file (see GDMA manual) to peform more complicated DMA
                      analyses.  If this option is used, the File keyword must be set to read
-                     a filename.fchk, where filename is provided by |globals__writer_file_label| .
+                     a filename.fchk, where filename is provided by :term:`WRITER_FILE_LABEL <WRITER_FILE_LABEL (GLOBALS)>` .
 
     :examples:
 
@@ -1931,8 +1931,7 @@ def gdma(wfn, datafile=""):
     if not datafile:
         os.remove(commands)
 
-
-def fchk(wfn, filename):
+def fchk(wfn, filename, *, debug=False, strict_label=True):
     """Function to write wavefunction information in *wfn* to *filename* in
     Gaussian FCHK format.
 
@@ -1940,17 +1939,27 @@ def fchk(wfn, filename):
 
     :returns: None
 
+    :type wfn: :py:class:`~psi4.core.Wavefunction`
+    :param wfn: set of molecule, basis, orbitals from which to generate fchk file
+
     :type filename: string
     :param filename: destination file name for FCHK file
 
-    :type wfn: :py:class:`~psi4.core.Wavefunction`
-    :param wfn: set of molecule, basis, orbitals from which to generate fchk file
+    :type debug: boolean
+    :param debug: returns a dictionary to aid with debugging
+
+    :type strict_label: boolean
+    :param strict_label: If true set a density label compliant with what Gaussian would write. A warning will be printed if this is not possible.
+                         Otherwise set the density label according to the method name.
 
     Notes
     -----
     * A description of the FCHK format is http://wild.life.nctu.edu.tw/~jsyu/compchem/g09/g09ur/f_formchk.htm
     * The allowed headers for methods are general and limited, i.e., "Total SCF|MP2|CI|CC Density",
-      so "CC" is always used for the post-HF case.
+      PSI4 will try to find the right one for the current calculation. If `strict_label=False` the PSI4 method name will be used as label.
+    * Not all theory modules in PSI4 are compatible with the FCHK writer.
+      A warning will be printed if a theory module is not supported.
+    * Caution! For orbital-optimized correlated methods (e.g. DCT, OMP2) the 'Orbital Energy' field contains ambiguous data.
 
     :examples:
 
@@ -1958,10 +1967,100 @@ def fchk(wfn, filename):
     >>> E, wfn = energy('b3lyp', return_wfn=True)
     >>> fchk(wfn, 'mycalc.fchk')
 
-    """
-    fw = core.FCHKWriter(wfn)
-    fw.write(filename)
+    >>> # [2] FCHK file for correlated densities
+    >>> E, wfn = gradient('ccsd', return_wfn=True)
+    >>> fchk(wfn, 'mycalc.fchk')
 
+    >>> # [2] Write FCHK file with non-standard label.
+    >>> E, wfn = gradient('mp2.5', return_wfn=True)
+    >>> fchk(wfn, 'mycalc.fchk', strict_label=False)
+
+    """
+    # * Known limitations and notes *
+    #
+    # OCC: (occ theory module only, not dfocc) is turned off as densities are not correctly set.
+    # DFMP2: Contains natural orbitals in wfn.C() and wfn.epsilon() data. This is fixed to contain respective HF data.
+
+    allowed = ['DFMP2', 'SCF', 'CCENERGY', 'DCT', 'DFOCC']
+    module_ = wfn.module().upper()
+    if module_ not in allowed:
+        core.print_out(f"FCHKWriter: Theory module {module_} is currently not supported by the FCHK writer.")
+        return None
+
+    if (wfn.basisset().has_ECP()):
+        core.print_out(f"FCHKWriter: Limited ECP support! No ECP data will be written to the FCHK file.")
+
+    # fix orbital coefficients and energies for DFMP2
+    if module_ in ['DFMP2']:
+        wfn_ = core.Wavefunction.build(wfn.molecule(), core.get_global_option('BASIS'))
+        wfn_.deep_copy(wfn)
+        refwfn = wfn.reference_wavefunction()
+        wfn_.set_reference_wavefunction(refwfn)  # refwfn not deep_copied
+        wfn_.Ca().copy(refwfn.Ca())
+        wfn_.Cb().copy(refwfn.Cb())
+        wfn_.epsilon_a().copy(refwfn.epsilon_a())
+        wfn_.epsilon_b().copy(refwfn.epsilon_b())
+        fw = core.FCHKWriter(wfn_)
+    else:
+        fw = core.FCHKWriter(wfn)
+
+    if module_ in ['DCT', 'DFOCC']:
+        core.print_out("""FCHKWriter: Caution! For orbital-optimized correlated methods
+            the 'Orbital Energy' field contains ambiguous data. \n""")
+
+    # At this point we don't know the method name, so we try to search for it.
+    # idea: get the method from the variable matching closely the 'current energy'
+    varlist = core.scalar_variables()
+    current = varlist['CURRENT ENERGY']
+
+    # delete problematic entries
+    for key in ['CURRENT ENERGY', 'CURRENT REFERENCE ENERGY']:
+        varlist.pop(key, None)
+
+    # find closest matching energy
+    for (key, val) in varlist.items():
+        if (np.isclose(val, current, 1e-12)):
+            method = key.split()[0]
+            break
+
+    # The 'official' list of labels for compatibility.
+    # OMP2,MP2.5,OCCD, etc get reduced to MP2,CC.
+    allowed_labels = {
+        "HF": " SCF Density",
+        "SCF": " SCF Density",
+        "DFT": " SCF Density",
+        "MP2": " MP2 Density",
+        "MP3": " MP3 Density",
+        "MP4": " MP4 Density",
+        "CI": " CI Density",
+        "CC": " CC Density",
+    }
+    # assign label from method name
+    fchk_label = f" {method} Density"
+    if strict_label:
+        in_list = False
+        for key in allowed_labels:
+            if key in method:
+                if key is not method:
+                    core.print_out(f"FCHKWriter: !WARNING! method '{method}'' renamed to label '{key}'.\n")
+                fchk_label = allowed_labels[key]
+                in_list = True
+        if not in_list:
+            core.print_out(f"FCHKWriter: !WARNING! {method} is not recognized. Using non-standard label.\n")
+    core.print_out(f"FCHKWriter: Writing {filename} with label '{fchk_label}'.\n")
+    fw.set_postscf_density_label(fchk_label)
+
+    fw.write(filename)
+    # needed for the pytest. The SCF density below follows PSI4 ordering not FCHK ordering.
+    if debug:
+        ret = {
+            "filename": filename,
+            "detected energy": method,
+            "selected label": fchk_label,
+            "Total SCF Density": fw.SCF_Dtot().np,
+        }
+        return ret
+    return None
 
 def molden(wfn, filename=None, density_a=None, density_b=None, dovirtual=None):
     """Function to write wavefunction information in *wfn* to *filename* in

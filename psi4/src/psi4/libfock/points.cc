@@ -3,7 +3,7 @@
  *
  * Psi4: an open-source quantum chemistry software package
  *
- * Copyright (c) 2007-2019 The Psi4 Developers.
+ * Copyright (c) 2007-2021 The Psi4 Developers.
  *
  * The copyrights for code used from other parties are included in
  * the corresponding files.
@@ -762,7 +762,7 @@ void BasisFunctions::compute_functions(std::shared_ptr<BlockOPoints> block) {
         center[2] = v[2];
 
         // Make new pointers, gg computes along rows so we need to skip down `nval` rows.
-        size_t row_shift = nvals * npoints;
+        size_t row_shift = static_cast<size_t>(nvals) * npoints;
         double* phi_start = tmpp + row_shift;
         const int order = (int)puream_ ? GG_SPHERICAL_GAUSSIAN : GG_CARTESIAN_CCA;
 
@@ -830,4 +830,4 @@ void BasisFunctions::print(std::string out, int print) const {
     printer->Printf("\n\n");
 }
 
-}  // Namespace psi
+}  // namespace psi

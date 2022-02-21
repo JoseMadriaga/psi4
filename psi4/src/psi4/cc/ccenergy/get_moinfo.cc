@@ -3,7 +3,7 @@
  *
  * Psi4: an open-source quantum chemistry software package
  *
- * Copyright (c) 2007-2019 The Psi4 Developers.
+ * Copyright (c) 2007-2021 The Psi4 Developers.
  *
  * The copyrights for code used from other parties are included in
  * the corresponding files.
@@ -211,6 +211,7 @@ void CCEnergyWavefunction::get_moinfo() {
             }
         }
         moinfo_.Cv = Cv;
+        moinfo_.scf = reference_wavefunction_->Ca()->to_block_matrix();
     } else if (params_.ref == 2) { /** UHF **/
 
         Ca = (double ***)malloc(nirreps * sizeof(double **));

@@ -3,7 +3,7 @@
  *
  * Psi4: an open-source quantum chemistry software package
  *
- * Copyright (c) 2007-2019 The Psi4 Developers.
+ * Copyright (c) 2007-2021 The Psi4 Developers.
  *
  * The copyrights for code used from other parties are included in
  * the corresponding files.
@@ -160,7 +160,7 @@ class PKManager {
     size_t pk_size() const { return pk_size_; }
     size_t ntasks() const { return ntasks_; }
     size_t memory() const { return memory_; }
-    SharedPKWrkr buffer(int i) const { return iobuffers_[i]; }
+    SharedPKWrkr& buffer(int i) { return iobuffers_[i]; }
     double* D_glob_vecs(int i) const { return D_vec_[i]; }
     double* JK_glob_vecs(int i) const { return JK_vec_[i]; }
     std::shared_ptr<BasisSet> primary() const { return primary_; }

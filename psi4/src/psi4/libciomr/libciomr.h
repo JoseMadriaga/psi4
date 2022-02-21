@@ -3,7 +3,7 @@
  *
  * Psi4: an open-source quantum chemistry software package
  *
- * Copyright (c) 2007-2019 The Psi4 Developers.
+ * Copyright (c) 2007-2021 The Psi4 Developers.
  *
  * The copyrights for code used from other parties are included in
  * the corresponding files.
@@ -106,6 +106,7 @@ PSI_API long int **init_long_int_matrix(int rows, int cols);
 PSI_API void free_long_int_matrix(long int **array);
 PSI_API void zero_long_int_matrix(long int **array, int rows, int cols);
 PSI_API void print_long_int_mat(long int **a, int m, int n, std::string out);
+PSI_API size_t *init_size_t_array(int size);
 
 /* Functions in block_matrix.c */
 PSI_API double **block_matrix(size_t n, size_t m, bool mlock = false);

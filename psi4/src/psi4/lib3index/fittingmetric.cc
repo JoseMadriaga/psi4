@@ -3,7 +3,7 @@
  *
  * Psi4: an open-source quantum chemistry software package
  *
- * Copyright (c) 2007-2019 The Psi4 Developers.
+ * Copyright (c) 2007-2021 The Psi4 Developers.
  *
  * The copyrights for code used from other parties are included in
  * the corresponding files.
@@ -122,7 +122,6 @@ void FittingMetric::form_fitting_metric() {
         } else {
             Jint[Q] = std::shared_ptr<TwoBodyAOInt>(rifactory_J.eri());
         }
-        Jbuffer[Q] = Jint[Q]->buffer();
     }
 
 #pragma omp parallel for schedule(dynamic) num_threads(nthread)
@@ -138,6 +137,7 @@ void FittingMetric::form_fitting_metric() {
             int numnu = aux_->shell(NU).nfunction();
 
             Jint[thread]->compute_shell(MU, 0, NU, 0);
+            Jbuffer[thread] = Jint[thread]->buffer();
 
             int index = 0;
             for (int mu = 0; mu < nummu; ++mu) {

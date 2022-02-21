@@ -3,7 +3,7 @@
  *
  * Psi4: an open-source quantum chemistry software package
  *
- * Copyright (c) 2007-2019 The Psi4 Developers.
+ * Copyright (c) 2007-2021 The Psi4 Developers.
  *
  * The copyrights for code used from other parties are included in
  * the corresponding files.
@@ -66,7 +66,8 @@ class CoupledCluster : public Wavefunction {
     /// flag for low-memory triples algorithm
     bool isLowMemory;
 
-    /// define qci/cc/mp tasks
+    /// Define "tasks" for QCI/CC/MP computations.
+    /// Lists are created and populated that store functions to perform tensor contractions.
     void DefineTasks();
     void DefineLinearTasks();
     void DefineQuadraticTasks();

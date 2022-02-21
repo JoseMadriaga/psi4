@@ -3,7 +3,7 @@
  *
  * Psi4: an open-source quantum chemistry software package
  *
- * Copyright (c) 2007-2019 The Psi4 Developers.
+ * Copyright (c) 2007-2021 The Psi4 Developers.
  *
  * The copyrights for code used from other parties are included in
  * the corresponding files.
@@ -717,8 +717,6 @@ void CoupledCluster::I2iajb_linear(CCTaskParams params) {
 void CoupledCluster::DefineLinearTasks() {
     LTasklist = new CCTask[1000];
     LParams = new CCTaskParams[1000];
-    long int o = ndoccact;
-    long int v = nvirt;
 
     nltasks = 0;
 

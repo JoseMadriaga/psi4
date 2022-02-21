@@ -3,7 +3,7 @@
  *
  * Psi4: an open-source quantum chemistry software package
  *
- * Copyright (c) 2007-2019 The Psi4 Developers.
+ * Copyright (c) 2007-2021 The Psi4 Developers.
  *
  * The copyrights for code used from other parties are included in
  * the corresponding files.
@@ -27,6 +27,7 @@
  */
 
 #include <string>
+#include <libint2/shell.h>
 
 #include "psi4/pybind11.h"
 
@@ -75,6 +76,8 @@
 using namespace psi;
 namespace py = pybind11;
 using namespace pybind11::literals;
+
+#include <pybind11/functional.h>
 
 void export_wavefunction(py::module& m) {
     typedef void (Wavefunction::*take_sharedwfn)(SharedWavefunction);
@@ -151,7 +154,8 @@ void export_wavefunction(py::module& m) {
         .def("epsilon_b", &Wavefunction::epsilon_b, "Returns the Beta Eigenvalues.")
         .def("epsilon_a_subset", &Wavefunction::epsilon_a_subset, "Returns the requested Alpha Eigenvalues subset.")
         .def("epsilon_b_subset", &Wavefunction::epsilon_b_subset, "Returns the requested Beta Eigenvalues subset.")
-        .def("X", &Wavefunction::X, "Returns the Lagrangian Matrix.")
+        .def("lagrangian", &Wavefunction::lagrangian, "Returns the Lagrangian Matrix.")
+        .def("set_lagrangian", &Wavefunction::set_lagrangian, "Sets the orbital Lagrangian matrix.")
         .def("basis_projection", &Wavefunction::basis_projection,
              "Projects a orbital matrix from one basis to another.")
         .def("H", &Wavefunction::H, "Returns the 'Core' Matrix (Potential + Kinetic) Integrals.")
@@ -248,6 +252,7 @@ void export_wavefunction(py::module& m) {
         .def("PCM_enabled", &Wavefunction::PCM_enabled, "Whether running a PCM calculation");
 
     py::class_<scf::HF, std::shared_ptr<scf::HF>, Wavefunction>(m, "HF", "docstring")
+        .def("compute_fvpi", &scf::HF::compute_fvpi, "Update number of frozen virtuals")
         .def("form_C", &scf::HF::form_C, "Forms the Orbital Matrices from the current Fock Matrices.")
         .def("form_initial_C", &scf::HF::form_initial_C,
              "Forms the initial Orbital Matrices from the current Fock Matrices.")
@@ -305,6 +310,9 @@ void export_wavefunction(py::module& m) {
         .def("clear_external_potentials", &scf::HF::clear_external_potentials, "Clear private external_potentials list")
         .def("push_back_external_potential", &scf::HF::push_back_external_potential,
              "Add an external potential to the private external_potentials list", "V"_a)
+        .def("set_external_cpscf_perturbation", &scf::HF::set_external_cpscf_perturbation,
+             "Add an external potential/perturbation to the private external_cpscf_perturbations map for CPSCF", "name"_a, "function"_a)
+        .def("clear_external_cpscf_perturbations", &scf::HF::clear_external_cpscf_perturbations, "Clear private external_cpscf_perturbations map")
         .def_property("iteration_", &scf::HF::iteration, &scf::HF::set_iteration, "docstring")
         .def_property("diis_enabled_", &scf::HF::diis_enabled, &scf::HF::set_diis_enabled, "docstring")
         .def_property("diis_start_", &scf::HF::diis_start, &scf::HF::set_diis_start, "docstring")
@@ -522,21 +530,20 @@ void export_wavefunction(py::module& m) {
                UHF: tIA, tia, tIjAb, tIJAB, tijab
                ROHF: tIA, tia, tIjAb, tIJAB, tijab
 
-              Examples
-              --------
-              RHF T1 diagnostic = sqrt(sum_ia (T_ia * T_ia)/nelec)
-              >>> mol = """
-              ... 0 1
-              ... Ne 0.0 0.0 0.0
-              ... symmetry c1"""
-              >>> e, wfn = psi4.energy("CCSD/cc-pvdz", return_wfn=True)
-              >>> t1 = wfn.get_amplitudes()['tia'].to_array()
-              >>> t1_diagnostic = np.sqrt(np.dot(t1.ravel(),t1.ravel())/ (2 * wfn.nalpha())
-              >>> t1_diagnostic == psi4.variable("CC T1 DIAGNOSTIC")
-              True
-
+               Examples
+               --------
+               RHF T1 diagnostic = sqrt(sum_ia (T_ia * T_ia)/nelec)
+               >>> mol = """
+               ... 0 1
+               ... Ne 0.0 0.0 0.0
+               ... symmetry c1"""
+               >>> e, wfn = psi4.energy("CCSD/cc-pvdz", return_wfn=True)
+               >>> t1 = wfn.get_amplitudes()['tia'].to_array()
+               >>> t1_diagnostic = np.sqrt(np.dot(t1.ravel(),t1.ravel())/ (2 * wfn.nalpha())
+               >>> t1_diagnostic == psi4.variable("CC T1 DIAGNOSTIC")
+               True
 
                .. warning:: Symmetry free calculations only (nirreps > 1 will cause error)
                .. warning:: No checks that the amplitudes will fit in core. Do not use for proteins
-            )docstring");
+        )docstring");
 }

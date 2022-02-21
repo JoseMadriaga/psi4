@@ -3,7 +3,7 @@
  *
  * Psi4: an open-source quantum chemistry software package
  *
- * Copyright (c) 2007-2019 The Psi4 Developers.
+ * Copyright (c) 2007-2021 The Psi4 Developers.
  *
  * The copyrights for code used from other parties are included in
  * the corresponding files.
@@ -38,6 +38,8 @@
 #include "psi4/psi4-dec.h"
 #include <cstdio>
 #include "psi4/libpsi4util/PsiOutStream.h"
+#include "psi4/liboptions/liboptions.h"
+#include "psi4/libpsi4util/process.h"
 ;
 using namespace psi;
 
@@ -193,7 +195,7 @@ void SOBasisSet::init() {
         }
     }
 
-    bool include_pure_transform = true;
+    bool include_pure_transform = false;
 
     petite_ = std::make_shared<PetiteList>(basis_, integral_, include_pure_transform);
 

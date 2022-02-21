@@ -3,7 +3,7 @@
  *
  * Psi4: an open-source quantum chemistry software package
  *
- * Copyright (c) 2007-2019 The Psi4 Developers.
+ * Copyright (c) 2007-2021 The Psi4 Developers.
  *
  * The copyrights for code used from other parties are included in
  * the corresponding files.
@@ -119,7 +119,8 @@ void OCCWave::cepa_iterations() {
             throw PSIEXCEPTION("LCCD iterations are diverging");
         }
 
-    } while (std::fabs(DE) >= tol_Eod || rms_t2 >= tol_t2);
+    } while (std::fabs(DE) >= (0.5 * tol_Eod) || rms_t2 >= tol_t2);
+    // 0.5 scale battens down a touch tighter for spin components since tol_Eod can be satisfied by small energy increase
 
     // delete
     delete t2DiisManager;

@@ -3,7 +3,7 @@
  *
  * Psi4: an open-source quantum chemistry software package
  *
- * Copyright (c) 2007-2019 The Psi4 Developers.
+ * Copyright (c) 2007-2021 The Psi4 Developers.
  *
  * The copyrights for code used from other parties are included in
  * the corresponding files.
@@ -68,10 +68,6 @@
 #include "psi4/libmints/integral.h"
 #include "psi4/libmints/quadrupole.h"
 #include "psi4/libmints/sobasis.h"
-
-#ifdef USING_PCMSolver
-#include "psi4/libpsipcm/psipcm.h"
-#endif
 
 #include "hf.h"
 
@@ -1184,7 +1180,6 @@ void HF::guess() {
         std::vector<SharedMatrix> Vsap;
         Vsap.push_back(SharedMatrix(factory_->create_matrix("Vsap")));
         builder->compute_V(Vsap);
-
         Fa_->copy(T_);
         Fa_->add(Vsap[0]);
         Fb_->copy(Fa_);

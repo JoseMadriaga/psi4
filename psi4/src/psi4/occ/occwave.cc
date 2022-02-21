@@ -3,7 +3,7 @@
  *
  * Psi4: an open-source quantum chemistry software package
  *
- * Copyright (c) 2007-2019 The Psi4 Developers.
+ * Copyright (c) 2007-2021 The Psi4 Developers.
  *
  * The copyrights for code used from other parties are included in
  * the corresponding files.
@@ -146,8 +146,8 @@ void OCCWave::common_init() {
         } else {
             double temp;
             temp = (-0.9 * std::log10(tol_Eod)) - 1.6;
-            if (temp < 4.0) {
-                temp = 4.0;
+            if (temp < 6.0) {
+                temp = 6.0;
             }
             tol_grad = pow(10.0, -temp);
             // tol_grad = 100.0*tol_Eod;
@@ -384,7 +384,7 @@ void OCCWave::title() {
     else if (wfn_type_ == "OMP3" && orb_opt_ == "FALSE")
         outfile->Printf("                             MP3   \n");
     else if (wfn_type_ == "OCEPA" && orb_opt_ == "TRUE")
-        outfile->Printf("                             OLCCD [OCEPA(0), OO-CEPA(0)]   \n");
+        outfile->Printf("                      OLCCD [OCEPA(0), OO-CEPA(0)]   \n");
     else if (wfn_type_ == "OCEPA" && orb_opt_ == "FALSE")
         outfile->Printf("                             LCCD [CEPA(0)]   \n");
     else if (wfn_type_ == "OMP2.5" && orb_opt_ == "TRUE")

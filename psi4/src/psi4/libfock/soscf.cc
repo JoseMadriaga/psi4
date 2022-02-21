@@ -3,7 +3,7 @@
  *
  * Psi4: an open-source quantum chemistry software package
  *
- * Copyright (c) 2007-2019 The Psi4 Developers.
+ * Copyright (c) 2007-2021 The Psi4 Developers.
  *
  * The copyrights for code used from other parties are included in
  * the corresponding files.
@@ -630,7 +630,7 @@ SharedMatrix SOMCSCF::Hk(SharedMatrix x) {
                     IFk->pointer(h)[noccpi_[h]], nmopi_[h], 0.0, Fkp[noccpi_[h]], nmopi_[h]);
 
             // OPDM_vw += Qk
-            C_DAXPY(nmopi_[h] * nactpi_[h], 1.0, Qkp[0], 1, Fkp[noccpi_[h]], 1);
+            C_DAXPY( static_cast<size_t>(nmopi_[h]) * nactpi_[h], 1.0, Qkp[0], 1, Fkp[noccpi_[h]], 1);
         }
 
         if (nvirpi_[h]) {
@@ -1061,7 +1061,7 @@ SharedMatrix DFSOMCSCF::compute_Qk(SharedMatrix TPDM, SharedMatrix U, SharedMatr
         for (int w = 0; w < nact_; w++) {
             for (int x = 0; x < nact_; x++) {
                 for (int y = 0; y < nact_; y++) {
-                    Gleftp[target++] = Gnwxyp[w * nmo_ * nact2 + n * nact2 + x * nact_ + y];
+                    Gleftp[target++] = Gnwxyp[w * nmo_ * nact2 + static_cast<size_t>(n) * nact2 + x * nact_ + y];
                 }
             }
         }
@@ -1440,4 +1440,4 @@ void IncoreSOMCSCF::set_eri_tensors(SharedMatrix aaaa, SharedMatrix aaar) {
     eri_tensor_set_ = true;
 }  // End DiskSOMCSCF object
 
-}  // Namespace psi
+}  // namespace psi

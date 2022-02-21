@@ -3,7 +3,7 @@
  *
  * Psi4: an open-source quantum chemistry software package
  *
- * Copyright (c) 2007-2019 The Psi4 Developers.
+ * Copyright (c) 2007-2021 The Psi4 Developers.
  *
  * The copyrights for code used from other parties are included in
  * the corresponding files.
@@ -69,8 +69,7 @@ PsiReturnType CoupledCluster::lowmemory_triples() {
     outfile->Printf("\n");
 
     outfile->Printf("\n");
-    outfile->Printf("        Warning: due to limited available memory,\n");
-    outfile->Printf("        using less efficient, low-memory algorithm\n");
+    outfile->Printf("        Using low-memory algorithm.\n");
     outfile->Printf("\n");
 
     long int o = ndoccact;

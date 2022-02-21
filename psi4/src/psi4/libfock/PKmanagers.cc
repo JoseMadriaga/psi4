@@ -3,7 +3,7 @@
  *
  * Psi4: an open-source quantum chemistry software package
  *
- * Copyright (c) 2007-2019 The Psi4 Developers.
+ * Copyright (c) 2007-2021 The Psi4 Developers.
  *
  * The copyrights for code used from other parties are included in
  * the corresponding files.
@@ -815,6 +815,7 @@ void PKMgrReorder::prestripe_files() {
         // We need to keep the labels around in a vector
         label_J_.push_back(PKWorker::get_label_J(batch));
         AIO()->zero_disk(pk_file(), label_J_[batch], 1, batch_size);
+        AIO()->synchronize();
         label_K_.push_back(PKWorker::get_label_K(batch));
         AIO()->zero_disk(pk_file(), label_K_[batch], 1, batch_size);
     }
@@ -1631,5 +1632,5 @@ void PKMgrInCore::form_J(std::vector<SharedMatrix> J, std::string exch, std::vec
 
 void PKMgrInCore::finalize_JK() { finalize_D(); }
 
-}  // End namespace pk
-}  // End namespace psi
+}  // namespace pk
+}  // namespace psi

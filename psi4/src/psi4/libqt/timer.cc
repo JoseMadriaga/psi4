@@ -3,7 +3,7 @@
  *
  * Psi4: an open-source quantum chemistry software package
  *
- * Copyright (c) 2007-2019 The Psi4 Developers.
+ * Copyright (c) 2007-2021 The Psi4 Developers.
  *
  * The copyrights for code used from other parties are included in
  * the corresponding files.
@@ -1039,6 +1039,15 @@ void timer_done() {
 
     omp_unset_lock(&lock_timer);
     omp_destroy_lock(&lock_timer);
+}
+
+void clean_timers() {
+    timer_done();
+    Timer_Structure new_root_timer(nullptr, ""), new_parallel_timer(nullptr, "");
+    extern Timer_Structure root_timer, parallel_timer;
+    root_timer = new_root_timer;
+    parallel_timer = new_parallel_timer;
+    timer_init();
 }
 
 void start_skip_timers() {

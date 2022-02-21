@@ -3,7 +3,7 @@
  *
  * Psi4: an open-source quantum chemistry software package
  *
- * Copyright (c) 2007-2019 The Psi4 Developers.
+ * Copyright (c) 2007-2021 The Psi4 Developers.
  *
  * The copyrights for code used from other parties are included in
  * the corresponding files.
@@ -68,7 +68,7 @@ void OCCWave::mograd() {
         rms_wogA = 0;
         for (int i = 0; i < nidpA; i++) rms_wogA += wogA->get(i) * wogA->get(i);
         norm_wogA = std::sqrt(rms_wogA);
-        rms_wogA = std::sqrt(rms_wogA) / nidpA;
+        rms_wogA = std::sqrt(rms_wogA / nidpA);
         rms_wog = rms_wogA;
 
         // print
@@ -129,12 +129,12 @@ void OCCWave::mograd() {
         rms_wogA = 0;
         for (int i = 0; i < nidpA; i++) rms_wogA += wogA->get(i) * wogA->get(i);
         norm_wogA = std::sqrt(rms_wogA);
-        rms_wogA = std::sqrt(rms_wogA) / nidpA;
+        rms_wogA = std::sqrt(rms_wogA / nidpA);
 
         rms_wogB = 0;
         for (int i = 0; i < nidpB; i++) rms_wogB += wogB->get(i) * wogB->get(i);
         norm_wogB = std::sqrt(rms_wogB);
-        rms_wogB = std::sqrt(rms_wogB) / nidpB;
+        rms_wogB = std::sqrt(rms_wogB / nidpB);
         rms_wog = MAX0(rms_wogA, rms_wogB);
 
         // print

@@ -3,7 +3,7 @@
  *
  * Psi4: an open-source quantum chemistry software package
  *
- * Copyright (c) 2007-2019 The Psi4 Developers.
+ * Copyright (c) 2007-2021 The Psi4 Developers.
  *
  * The copyrights for code used from other parties are included in
  * the corresponding files.
@@ -31,6 +31,7 @@
 #include <pybind11/pytypes.h>
 #include <pybind11/stl_bind.h>
 #include <pybind11/operators.h>
+#include <libint2/shell.h>
 
 #include "psi4/libmints/basisset.h"
 #include "psi4/libmints/deriv.h"
@@ -305,21 +306,12 @@ std::shared_ptr<Molecule> from_dict(py::dict molrec) {
 }
 
 void export_mints(py::module& m) {
-    // This is needed to wrap an STL vector into Boost.Python. Since the vector
-    // is going to contain std::shared_ptr's we MUST set the no_proxy flag to true
-    // (as it is) to tell Boost.Python to not create a proxy class to handle
-    // the vector's data type.
-    py::bind_vector<std::vector<std::shared_ptr<Matrix>>>(m, "VectorMatrix");
-
-    // Other vector types
-    // py::class_<std::vector<double> >(m, "vector_of_doubles", "docstring").
-    //        def(vector_indexing_suite<std::vector<double>, true >());
-    //    py::bind_vector<double>(m, "VectorDouble");
 
     typedef void (Vector::*vector_setitem_1)(int, double);
     typedef void (Vector::*vector_setitem_2)(int, int, double);
     typedef double (Vector::*vector_getitem_1)(int) const;
     typedef double (Vector::*vector_getitem_2)(int, int) const;
+    typedef void (Vector::*vector_one)(const Vector &other);
 
     py::class_<Dimension>(m, "Dimension", "Initializes and defines Dimension Objects")
         .def(py::init<int>())
@@ -365,6 +357,7 @@ void export_mints(py::module& m) {
         .def("set", vector_setitem_1(&Vector::set), "Sets a single element value located at m", "m"_a, "val"_a)
         .def("set", vector_setitem_2(&Vector::set), "Sets a single element value located at m in irrep h", "h"_a, "m"_a,
              "val"_a)
+        .def("copy", vector_one(&Vector::copy), "Returns a copy of the matrix")
         .def("print_out", &Vector::print_out, "Prints the vector to the output file")
         .def("scale", &Vector::scale, "Scales the elements of a vector by sc", "sc"_a)
         .def("dim", &Vector::dim, "Returns the dimensions of the vector per irrep h", "h"_a = 0)
@@ -639,10 +632,12 @@ void export_mints(py::module& m) {
             py::return_value_policy::reference_internal);
 
     // Free functions
-    m.def("doublet", &linalg::doublet,
+    typedef Matrix (*doublet_shared)(const Matrix&, const Matrix&, bool, bool);
+    typedef Matrix (*triplet_shared)(const Matrix&, const Matrix&, const Matrix&, bool, bool, bool);
+    m.def("doublet", doublet_shared(&linalg::doublet),
           "Returns the multiplication of two matrices A and B, with options to transpose each beforehand", "A"_a, "B"_a,
           "transA"_a = false, "transB"_a = false);
-    m.def("triplet", &linalg::triplet,
+    m.def("triplet", triplet_shared(&linalg::triplet),
           "Returns the multiplication of three matrics A, B, and C, with options to transpose each beforehand", "A"_a,
           "B"_a, "C"_a, "transA"_a = false, "transB"_a = false, "transC"_a = false);
 
@@ -661,7 +656,8 @@ void export_mints(py::module& m) {
              "Ignore reference contributions to the gradient? Default is False", "val"_a = false)
         .def("set_deriv_density_backtransformed", &Deriv::set_deriv_density_backtransformed,
              "Is the deriv_density already backtransformed? Default is False", "val"_a = false)
-        .def("compute", &Deriv::compute, "Compute the gradient", "deriv_calc_type"_a = DerivCalcType::Default);
+        .def("compute", &Deriv::compute, "Compute the gradient", "deriv_calc_type"_a = DerivCalcType::Default)
+        .def("compute_df", &Deriv::compute_df, "Compute the density-fitted gradient");
 
     typedef SharedMatrix (MatrixFactory::*create_shared_matrix)() const;
     typedef SharedMatrix (MatrixFactory::*create_shared_matrix_name)(const std::string&) const;
@@ -756,8 +752,8 @@ void export_mints(py::module& m) {
         .export_values();
 
     py::enum_<GaussianType>(m, "GaussianType", "0 if Cartesian, 1 if Pure")
-        .value("Cartesian", Cartesian)
-        .value("Pure", Pure)
+        .value("Cartesian", Cartesian, "(n+1)(n+2)/2 functions")
+        .value("Pure", Pure, "2n+1 functions")
         .export_values();
 
     py::class_<ShellInfo, std::shared_ptr<ShellInfo>>(m, "ShellInfo")
@@ -808,17 +804,23 @@ void export_mints(py::module& m) {
     py::class_<AngularMomentumInt, std::shared_ptr<AngularMomentumInt>>(m, "AngularMomentumInt", pyOneBodyAOInt,
                                                                         "Computes angular momentum integrals");
 
+    typedef bool (TwoBodyAOInt::*compute_shell_significant)(int, int, int, int);
     typedef size_t (TwoBodyAOInt::*compute_shell_ints)(int, int, int, int);
     py::class_<TwoBodyAOInt, std::shared_ptr<TwoBodyAOInt>> pyTwoBodyAOInt(m, "TwoBodyAOInt",
                                                                            "Two body integral base class");
     pyTwoBodyAOInt.def("compute_shell", compute_shell_ints(&TwoBodyAOInt::compute_shell),
-                       "Compute ERIs between 4 shells");  // <-- Semicolon
+                       "Compute ERIs between 4 shells")
+        .def("shell_significant", compute_shell_significant(&TwoBodyAOInt::shell_significant),
+                       "Determines if the P,Q,R,S shell combination is significant");
 
-    py::class_<TwoElectronInt, std::shared_ptr<TwoElectronInt>>(m, "TwoElectronInt", pyTwoBodyAOInt,
+    py::class_<Libint2TwoElectronInt, std::shared_ptr<Libint2TwoElectronInt>>(m, "TwoElectronInt", pyTwoBodyAOInt,
                                                                 "Computes two-electron repulsion integrals")
-        .def("compute_shell", compute_shell_ints(&TwoBodyAOInt::compute_shell), "Compute ERIs between 4 shells");
+        .def("compute_shell", compute_shell_ints(&TwoBodyAOInt::compute_shell), "Compute ERIs between 4 shells")
+        .def("shell_significant", compute_shell_significant(&TwoBodyAOInt::shell_significant),
+                       "Determines if the P,Q,R,S shell combination is significant");
 
-    py::class_<ERI, std::shared_ptr<ERI>>(m, "ERI", pyTwoBodyAOInt, "Computes normal two electron reuplsion integrals");
+    py::class_<Libint2ERI, std::shared_ptr<Libint2ERI>>(m, "ERI", pyTwoBodyAOInt, "Computes normal two electron repulsion integrals");
+#ifdef ENABLE_Libint1t
     py::class_<F12, std::shared_ptr<F12>>(m, "F12", pyTwoBodyAOInt, "Computes F12 electron repulsion integrals");
     py::class_<F12G12, std::shared_ptr<F12G12>>(m, "F12G12", pyTwoBodyAOInt,
                                                 "Computes F12G12 electron repulsion integrals");
@@ -830,6 +832,7 @@ void export_mints(py::module& m) {
                                                 "Computes ERF electron repulsion integrals");
     py::class_<ErfComplementERI, std::shared_ptr<ErfComplementERI>>(
         m, "ErfComplementERI", pyTwoBodyAOInt, "Computes ERF complement electron repulsion integrals");
+#endif  // ENABLE_Libint1t
 
     py::class_<AOShellCombinationsIterator, std::shared_ptr<AOShellCombinationsIterator>>(m,
                                                                                           "AOShellCombinationsIterator")
@@ -853,7 +856,7 @@ void export_mints(py::module& m) {
         // py::return_value_policy<manage_new_object>(), "docstring").
         .def("shells_iterator", &IntegralFactory::shells_iterator_ptr,
              "Returns an ERI iterator object, only coded for standard ERIs")
-        .def("eri", &IntegralFactory::eri, "Returns an ERI integral object", "deriv"_a = 0, "use_shell_pairs"_a = true)
+        .def("eri", &IntegralFactory::eri, "Returns an ERI integral object", "deriv"_a = 0, "use_shell_pairs"_a = true, "needs_exchange"_a = false)
         .def("f12", &IntegralFactory::f12, "Returns an F12 integral object", "cf"_a, "deriv"_a = 0,
              "use_shell_pairs"_a = true)
         .def("f12g12", &IntegralFactory::f12g12, "Returns an F12G12 integral object", "cf"_a, "deriv"_a = 0,
@@ -863,10 +866,10 @@ void export_mints(py::module& m) {
         .def("f12_squared", &IntegralFactory::f12_squared, "Returns an F12 squared integral object", "cf"_a,
              "deriv"_a = 0, "use_shell_pairs"_a = true)
         .def("erf_eri", &IntegralFactory::erf_eri, "Returns and erf ERI integral object (omega integral)", "omega"_a,
-             "deriv"_a = 0, "use_shell_pairs"_a = true)
+             "deriv"_a = 0, "use_shell_pairs"_a = true, "needs_exchange"_a = false)
         .def("erf_complement_eri", &IntegralFactory::erf_complement_eri,
              "Returns an erf complement ERI integral object (omega integral)", "omega"_a, "deriv"_a = 0,
-             "use_shell_pairs"_a = true)
+             "use_shell_pairs"_a = true, "needs_exchange"_a = false)
         .def("ao_overlap", &IntegralFactory::ao_overlap, "Returns a OneBodyInt that computes the AO overlap integrals",
              "deriv"_a = 0)
         .def("so_overlap", &IntegralFactory::so_overlap, "Returns a OneBodyInt that computes the SO overlap integrals",
@@ -1065,6 +1068,12 @@ void export_mints(py::module& m) {
              "atom"_a, "omega"_a = 0.0, "factory"_a = nullptr)
         .def("ao_tei_deriv2", &MintsHelper::ao_tei_deriv2,
              "Hessian  of AO basis TEI integrals: returns (3 * natoms)^2 matrices", "atom1"_a, "atom2"_a)
+        .def("ao_metric_deriv1", &MintsHelper::ao_metric_deriv1,
+             "Gradient of AO basis metric integrals: returns 3 matrices",
+             "atom"_a, "aux_name"_a)
+        .def("ao_3center_deriv1", &MintsHelper::ao_3center_deriv1,
+             "Gradient of AO basis 3-center, density-fitted integrals: returns 3 matrices",
+             "atom"_a, "aux_name"_a)
         .def("mo_oei_deriv1", &MintsHelper::mo_oei_deriv1,
              "Gradient of MO basis OEI integrals: returns (3 * natoms) matrices",
              "oei_type"_a, "atom"_a, "C1"_a, "C2"_a)
@@ -1388,6 +1397,8 @@ void export_mints(py::module& m) {
              "Sets basis set arg1 to all atoms with symbol (e.g., H) arg0")
         .def("set_basis_by_label", &Molecule::set_basis_by_label,
              "Sets basis set arg1 to all atoms with label (e.g., H4) arg0")
+        .def("set_basis_by_number", &Molecule::set_basis_by_number,
+             "Sets basis set arg1 to all atoms with number arg0")
         .def("distance_matrix", &Molecule::distance_matrix, "Returns Matrix of interatom distances")
         .def("print_distances", &Molecule::print_distances, "Print the interatomic distance geometrical parameters")
         .def("print_bond_angles", &Molecule::print_bond_angles, "Print the bond angle geometrical parameters")
@@ -1469,7 +1480,7 @@ void export_mints(py::module& m) {
              "Return the si'th Gaussian shell on center", "center"_a, "si"_a)
         .def("n_frozen_core", &BasisSet::n_frozen_core,
              "Returns the number of orbital (non-ECP) frozen core electrons. For a given molecule and "
-             "|globals__freeze_core|, `(n_ecp_core()/2 + n_frozen_core()) = constant`.")
+             ":term:`FREEZE_CORE <FREEZE_CORE (GLOBALS)>`, `(n_ecp_core()/2 + n_frozen_core()) = constant`.")
         .def("n_ecp_core", ncore_no_args(&BasisSet::n_ecp_core),
              "Returns the total number of core electrons associated with all ECPs in this basis.")
         .def("n_ecp_core", ncore_one_arg(&BasisSet::n_ecp_core),
@@ -1542,7 +1553,9 @@ void export_mints(py::module& m) {
                                                         "Extracts information from a wavefunction object, \
                                                                           and writes it to an FCHK file")
         .def(py::init<std::shared_ptr<Wavefunction>>())
-        .def("write", &FCHKWriter::write, "Write wavefunction information to file", "filename"_a);
+        .def("write", &FCHKWriter::write, "Write wavefunction information to file", "filename"_a)
+        .def("SCF_Dtot",&FCHKWriter::SCF_Dtot,py::return_value_policy::reference_internal)
+        .def("set_postscf_density_label", &FCHKWriter::set_postscf_density_label, "Set base label for post-SCF density, e.g. ' CC Density'.", "label"_a);
 
     py::class_<MoldenWriter, std::shared_ptr<MoldenWriter>>(m, "MoldenWriter",
                                                             "Writes wavefunction information in molden format")

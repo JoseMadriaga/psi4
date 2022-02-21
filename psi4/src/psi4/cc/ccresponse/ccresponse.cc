@@ -3,7 +3,7 @@
  *
  * Psi4: an open-source quantum chemistry software package
  *
- * Copyright (c) 2007-2019 The Psi4 Developers.
+ * Copyright (c) 2007-2021 The Psi4 Developers.
  *
  * The copyrights for code used from other parties are included in
  * the corresponding files.
@@ -48,7 +48,6 @@
 #include "psi4/psi4-dec.h"
 #include "Params.h"
 #include "MOInfo.h"
-#include "Local.h"
 #include "globals.h"
 
 namespace psi {
@@ -69,13 +68,14 @@ void hbar_extra();
 void cc2_hbar_extra();
 void sort_lamps();
 void lambda_residuals();
+void lambda_2();
+void sort_lamps_quadratic_resp();
+void sort_integrals_quadratic_resp();
 
-void local_init();
-void local_done();
-
-void polar();
-void optrot(std::shared_ptr<Molecule> molecule);
-void roa();
+void polar(std::shared_ptr<Wavefunction> ref_wfn);
+void optrot(std::shared_ptr<Wavefunction> ref_wfn);
+void roa(std::shared_ptr<Wavefunction> ref_wfn);
+void hyper();
 
 void preppert(std::shared_ptr<BasisSet> primary);
 
@@ -113,8 +113,6 @@ PsiReturnType ccresponse(std::shared_ptr<Wavefunction> ref_wfn, Options &options
         dpd_init(0, moinfo.nirreps, params.memory, 0, cachefiles, cachelist, nullptr, 2, spaces);
     }
 
-    if (params.local) local_init();
-
     if (params.wfn == "CC2") {
         cc2_hbar_extra();
     } else {
@@ -126,11 +124,15 @@ PsiReturnType ccresponse(std::shared_ptr<Wavefunction> ref_wfn, Options &options
 
     preppert(ref_wfn->basisset());
 
-    if (params.prop == "POLARIZABILITY") polar();
-    if (params.prop == "ROTATION") optrot(ref_wfn->molecule());
-    if (params.prop == "ROA_TENSOR") roa();
-
-    if (params.local) local_done();
+    if (params.prop == "POLARIZABILITY") polar(ref_wfn);
+    if (params.prop == "ROTATION") optrot(ref_wfn);
+    if (params.prop == "ROA_TENSOR") roa(ref_wfn);
+    if (params.prop == "HYPERPOLARIZABILITY") {
+       lambda_2();
+       sort_lamps_quadratic_resp();
+       sort_integrals_quadratic_resp();
+       hyper();
+       }
 
     dpd_close(0);
 

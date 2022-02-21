@@ -3,7 +3,7 @@
  *
  * Psi4: an open-source quantum chemistry software package
  *
- * Copyright (c) 2007-2019 The Psi4 Developers.
+ * Copyright (c) 2007-2021 The Psi4 Developers.
  *
  * The copyrights for code used from other parties are included in
  * the corresponding files.
@@ -48,6 +48,7 @@ class Matrix;
 class Dimension;
 class Wavefunction;
 class PSIO;
+class SOBasisSet;
 
 typedef std::vector<std::shared_ptr<MOSpace> > SpaceVec;
 
@@ -148,9 +149,6 @@ class PSI_API IntegralTransform {
     void initialize();
     void presort_so_tei();
     void update_orbitals();
-    void transform_T_plus_V(const std::shared_ptr<MOSpace> s1, const std::shared_ptr<MOSpace> s2);
-    void transform_oei(const std::shared_ptr<MOSpace> s1, const std::shared_ptr<MOSpace> s2,
-                       const std::array<std::string, 4> &labels);
     void transform_tei(const std::shared_ptr<MOSpace> s1, const std::shared_ptr<MOSpace> s2,
                        const std::shared_ptr<MOSpace> s3, const std::shared_ptr<MOSpace> s4,
                        HalfTrans = HalfTrans::MakeAndNuke);
@@ -177,8 +175,6 @@ class PSI_API IntegralTransform {
     void set_write_dpd_so_tpdm(bool t_f) { write_dpd_so_tpdm_ = t_f; }
     /// Set the level of printing used during transformations (0 -> 6)
     void set_print(int n) { print_ = n; }
-    /// Whether to build the Fock matrix in the MO basis during integral presort
-    void set_build_mo_fock(bool t_f) { buildMOFock_ = t_f; }
     /// Sets the orbitals to the given C matrix. This is a hack for MCSCF wavefunctions.
     /// Use with caution.
     void set_orbitals(SharedMatrix C);
@@ -257,10 +253,6 @@ class PSI_API IntegralTransform {
     void setup_tpdm_buffer(const dpdbuf4 *D);
     void sort_so_tpdm(const dpdbuf4 *B, int irrep, size_t first_row, size_t num_rows, bool first_run);
 
-    void transform_oei_restricted(const std::shared_ptr<MOSpace> s1, const std::shared_ptr<MOSpace> s2,
-                                  const std::vector<double> &soInts, std::string label);
-    void transform_oei_unrestricted(const std::shared_ptr<MOSpace> s1, const std::shared_ptr<MOSpace> s2,
-                                    const std::vector<double> &soInts, std::string A_label, std::string B_label);
     void trans_one(int m, int n, double *input, double *output, double **C, int soOffset, int *order,
                    bool backtransform = false, double scale = 0.0);
 
@@ -271,10 +263,13 @@ class PSI_API IntegralTransform {
     std::vector<size_t> tpdm_buffer_sizes_;
     // The buffer used in sorting the SO basis tpdm
     double *tpdm_buffer_;
-    // Frozen core energy
+    // Energy due solely to frozen core orbitals. Some modules request libtrans compute this so
+    // that they don't have to concern themselves with core orbitals at all. In those cases,
+    // contributions due to the valence orbitals feeling the electric field of the core orbitals
+    // are accounted for by writing a "frozen core operator" to disk.
     double frozen_core_energy_;
-    // The wavefunction object, containing the orbital infomation
-    std::shared_ptr<Wavefunction> wfn_;
+    // Contains information about the SOs, needed when iterating
+    std::shared_ptr<SOBasisSet> sobasis_;
     // Pointer to the PSIO object to use for file I/O
     std::shared_ptr<PSIO> psio_;
     // The type of transformation
@@ -419,8 +414,6 @@ class PSI_API IntegralTransform {
     bool useDPD_;
     // Has this object already pre-sorted?
     bool tpdmAlreadyPresorted_;
-    // Whether to form the MO basis Fock matrix during TEI presort
-    bool buildMOFock_;
     // This keeps track of which labels have been assigned by other spaces
     std::map<char, int> labelsUsed_;
 };

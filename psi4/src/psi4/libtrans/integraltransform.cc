@@ -3,7 +3,7 @@
  *
  * Psi4: an open-source quantum chemistry software package
  *
- * Copyright (c) 2007-2019 The Psi4 Developers.
+ * Copyright (c) 2007-2021 The Psi4 Developers.
  *
  * The copyrights for code used from other parties are included in
  * the corresponding files.
@@ -46,7 +46,7 @@ IntegralTransform::IntegralTransform(std::shared_ptr<Wavefunction> wfn, SpaceVec
                                      MOOrdering moOrdering, FrozenOrbitals frozenOrbitals, bool init)
     : initialized_(false),
       psio_(_default_psio_lib_),
-      wfn_(wfn),
+      sobasis_(wfn->sobasisset()),
       transformationType_(transformationType),
       uniqueSpaces_(spaces),
       moOrdering_(moOrdering),
@@ -84,7 +84,6 @@ IntegralTransform::IntegralTransform(std::shared_ptr<Wavefunction> wfn, SpaceVec
       keepDpdMoTpdm_(true),
       keepHtInts_(true),
       keepHtTpdm_(true),
-      buildMOFock_(true),
       tpdmAlreadyPresorted_(false),
       soIntTEIFile_(PSIF_SO_TEI) {
     // Implement set/get functions to customize any of this stuff.  Delayed initialization
@@ -161,7 +160,6 @@ IntegralTransform::IntegralTransform(SharedMatrix H, SharedMatrix c, SharedMatri
       keepDpdMoTpdm_(true),
       keepHtInts_(true),
       keepHtTpdm_(true),
-      buildMOFock_(true),
       tpdmAlreadyPresorted_(false),
       soIntTEIFile_(PSIF_SO_TEI) {
     memory_ = Process::environment.get_memory();
@@ -283,8 +281,6 @@ void IntegralTransform::initialize() {
     if (transformationType_ == TransformationType::SemiCanonical) {
         throw PSIEXCEPTION(
             "Semicanonical is deprecated in Libtrans. Please pre-semicanonicalize before passing to libtrans.");
-        // wfn_->semicanonicalize();
-        Cb_ = wfn_->Cb();
     }
     process_eigenvectors();
 

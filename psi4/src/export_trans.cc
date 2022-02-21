@@ -3,7 +3,7 @@
  *
  * Psi4: an open-source quantum chemistry software package
  *
- * Copyright (c) 2007-2019 The Psi4 Developers.
+ * Copyright (c) 2007-2021 The Psi4 Developers.
  *
  * The copyrights for code used from other parties are included in
  * the corresponding files.
@@ -125,8 +125,6 @@ void export_trans(py::module& m) {
     int_trans_bind.def("initialize", &IntegralTransform::initialize, "Initialize an IntegralTransform")
         .def("presort_so_tei", &IntegralTransform::presort_so_tei, "docstring")
         .def("update_orbitals", &IntegralTransform::update_orbitals, "docstring")
-        .def("transform_oei", &IntegralTransform::transform_oei, "Transform one-electron integrals", "s1"_a, "s2"_a,
-             "labels"_a)
         .def("transform_tei", &IntegralTransform::transform_tei, "Transform two-electron integrals", "s1"_a, "s2"_a,
              "s3"_a, "s4"_a, "half_trans"_a = IntegralTransform::HalfTrans::MakeAndNuke)
         .def("transform_tei_first_half", &IntegralTransform::transform_tei_first_half,

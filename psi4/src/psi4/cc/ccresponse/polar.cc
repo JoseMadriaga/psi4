@@ -3,7 +3,7 @@
  *
  * Psi4: an open-source quantum chemistry software package
  *
- * Copyright (c) 2007-2019 The Psi4 Developers.
+ * Copyright (c) 2007-2021 The Psi4 Developers.
  *
  * The copyrights for code used from other parties are included in
  * the corresponding files.
@@ -40,13 +40,14 @@
 #include "psi4/libciomr/libciomr.h"
 #include "psi4/libpsio/psio.h"
 #include "psi4/libqt/qt.h"
+#include "psi4/libmints/wavefunction.h"
 #include "psi4/physconst.h"
 
 #include "MOInfo.h"
 #include "Params.h"
-#include "Local.h"
 #define EXTERN
 #include "globals.h"
+#include "psi4/libmints/matrix.h"
 
 namespace psi {
 namespace ccresponse {
@@ -56,7 +57,7 @@ void compute_X(const char *pert, int irrep, double omega);
 void linresp(double *tensor, double A, double B, const char *pert_x, int x_irrep, double omega_x, const char *pert_y,
              int y_irrep, double omega_y);
 
-void polar() {
+void polar(std::shared_ptr<Wavefunction> ref_wfn) {
     double ***tensor;
     char **cartcomp, pert[32], pert_x[32], pert_y[32];
     int alpha, beta, i;
@@ -141,12 +142,22 @@ void polar() {
         }
         if (params.wfn == "CC2") {
             std::stringstream tag;
+            std::stringstream tag_tensor;
             tag << "CC2 DIPOLE POLARIZABILITY @ " << omega_nm_rd << "NM";
             Process::environment.globals[tag.str()] = trace[i] / 3.0;
+            tag_tensor << "CC2 DIPOLE POLARIZABILITY TENSOR @ " << omega_nm_rd << "NM";
+            auto tensor_mat = std::make_shared<Matrix>(3, 3);
+            tensor_mat->set(tensor[i]);
+            ref_wfn->set_array_variable(tag_tensor.str(),tensor_mat);
         } else if (params.wfn == "CCSD") {
             std::stringstream tag;
+            std::stringstream tag_tensor;
             tag << "CCSD DIPOLE POLARIZABILITY @ " << omega_nm_rd << "NM";
             Process::environment.globals[tag.str()] = trace[i] / 3.0;
+            tag_tensor << "CCSD DIPOLE POLARIZABILITY TENSOR @ " << omega_nm_rd << "NM";
+            auto tensor_mat = std::make_shared<Matrix>(3, 3);
+            tensor_mat->set(tensor[i]);
+            ref_wfn->set_array_variable(tag_tensor.str(),tensor_mat);
         }
     }
 

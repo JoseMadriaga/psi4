@@ -3,7 +3,7 @@
  *
  * Psi4: an open-source quantum chemistry software package
  *
- * Copyright (c) 2007-2019 The Psi4 Developers.
+ * Copyright (c) 2007-2021 The Psi4 Developers.
  *
  * The copyrights for code used from other parties are included in
  * the corresponding files.
@@ -74,7 +74,6 @@ void DFOCC::common_init() {
     e3_scale = options_.get_double("E3_SCALE");
     tol_Eod = options_.get_double("E_CONVERGENCE");
     tol_t2 = options_.get_double("R_CONVERGENCE");
-    tol_pcg = options_.get_double("PCG_CONVERGENCE");
     reg_param = options_.get_double("REG_PARAM");
     tol_ldl = options_.get_double("CHOLESKY_TOLERANCE");
 
@@ -114,6 +113,16 @@ void DFOCC::common_init() {
 
     // title
     title();
+
+    //   Given default conjugate gradient convergence, set the criteria by what shoud
+    //   be necessary to achive the target energy convergence.
+    //   This is based solely on standard suite testing to achieve 1e-6 E & G with default convcrit.
+    if (options_["PCG_CONVERGENCE"].has_changed()) {
+        tol_pcg = options_.get_double("PCG_CONVERGENCE");
+    } else {
+        tol_pcg = 0.01 * tol_t2;
+        outfile->Printf("\tFor this residual convergence, default PCG convergence is: %12.2e\n", tol_pcg);
+    }
 
     //   Given default orbital convergence, set the criteria by what should
     //   be necessary to achieve the target energy convergence.
@@ -402,25 +411,6 @@ void DFOCC::title() {
         outfile->Printf("                      QCHF   \n");
     outfile->Printf("              Program Written by Ugur Bozkaya\n");
     outfile->Printf("              Latest Revision September 9, 2017\n");
-    outfile->Printf("\n");
-    outfile->Printf(" ============================================================================== \n");
-    outfile->Printf(" ============================================================================== \n");
-    outfile->Printf(" ============================================================================== \n");
-    outfile->Printf("\n");
-
-}  //
-
-void DFOCC::title_grad() {
-    outfile->Printf("\n");
-    outfile->Printf(" ============================================================================== \n");
-    outfile->Printf(" ============================================================================== \n");
-    outfile->Printf(" ============================================================================== \n");
-    outfile->Printf("\n");
-    outfile->Printf("                         DFGRAD   \n");
-    outfile->Printf("            A General Analytic Gradients Code   \n");
-    outfile->Printf("               for Density-Fitted Methods       \n");
-    outfile->Printf("                   by Ugur Bozkaya\n");
-    outfile->Printf("              Latest Revision December 19, 2016\n");
     outfile->Printf("\n");
     outfile->Printf(" ============================================================================== \n");
     outfile->Printf(" ============================================================================== \n");

@@ -3,7 +3,7 @@
  *
  * Psi4: an open-source quantum chemistry software package
  *
- * Copyright (c) 2007-2019 The Psi4 Developers.
+ * Copyright (c) 2007-2021 The Psi4 Developers.
  *
  * The copyrights for code used from other parties are included in
  * the corresponding files.
@@ -57,6 +57,7 @@ class PCM final {
      *  \param[in] type how to treat MEP and ASC
      */
     std::pair<double, SharedMatrix> compute_PCM_terms(const SharedMatrix &D, CalcType type = CalcType::Total) const;
+    SharedMatrix compute_V(const SharedMatrix &D);
 
    private:
     /// The number of tesserae in PCMSolver.
@@ -80,7 +81,7 @@ class PCM final {
      *  \param[in] ASC the apparent surface charge to contract with
      *  charge-attraction integrals
      */
-    SharedMatrix compute_V(const SharedVector &ASC) const;
+    SharedMatrix compute_Vpcm(const SharedVector &ASC) const;
 
     /// Current basis set (for puream and nao/nso info)
     std::shared_ptr<BasisSet> basisset_;

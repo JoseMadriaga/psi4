@@ -3,7 +3,7 @@
  *
  * Psi4: an open-source quantum chemistry software package
  *
- * Copyright (c) 2007-2019 The Psi4 Developers.
+ * Copyright (c) 2007-2021 The Psi4 Developers.
  *
  * The copyrights for code used from other parties are included in
  * the corresponding files.
@@ -173,11 +173,9 @@ void OCCWave::trans_ints_rhf() {
     }
 
     else if (orb_opt_ == "FALSE") {
-        for (int h = 0; h < nirrep_; ++h) {
-            for (int i = 0; i < occpiA[h]; ++i) FockA->set(h, i, i, epsilon_a_->get(h, i));
-            for (int a = 0; a < virtpiA[h]; ++a)
-                FockA->set(h, a + occpiA[h], a + occpiA[h], epsilon_a_->get(h, a + occpiA[h]));
-        }
+        // Assume that the Fock matrix is up-to-date.
+        FockA = Fa_->clone();
+        FockA->transform(Ca_);
     }
 
     timer_on("Build Denominators");

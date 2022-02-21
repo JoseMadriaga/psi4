@@ -3,7 +3,7 @@
  *
  * Psi4: an open-source quantum chemistry software package
  *
- * Copyright (c) 2007-2019 The Psi4 Developers.
+ * Copyright (c) 2007-2021 The Psi4 Developers.
  *
  * The copyrights for code used from other parties are included in
  * the corresponding files.
@@ -26,6 +26,7 @@
  * @END LICENSE
  */
 
+#include <libint2/shell.h>
 #include "psi4/pybind11.h"
 #include "psi4/libfunctional/superfunctional.h"
 #include "psi4/libfunctional/functional.h"
@@ -148,10 +149,16 @@ void export_functional(py::module &m) {
         .def("print_out", &Functional::py_print, "docstring")
         .def("print_detail", &Functional::py_print_detail, "docstring");
 
+    typedef void (LibXCFunctional::*tweak_set1)(std::vector<double>, bool);
+    typedef void (LibXCFunctional::*tweak_set2)(std::map<std::string, double>, bool);
+
     py::class_<LibXCFunctional, std::shared_ptr<LibXCFunctional>, Functional>(m, "LibXCFunctional", "docstring")
         .def(py::init<std::string, bool>())
         .def("get_mix_data", &LibXCFunctional::get_mix_data, "docstring")
-        .def("set_tweak", &LibXCFunctional::set_tweak, "docstring")
+        .def("set_tweak", tweak_set1(&LibXCFunctional::set_tweak), "tweaks"_a, "quiet"_a = false,
+            "Set all tweaks on a LibXC functional through a list. Deprecated in v1.4")
+        .def("set_tweak", tweak_set2(&LibXCFunctional::set_tweak), "tweaks"_a, "quiet"_a = false,
+            "Set all tweaks on a LibXC functional through a dictionary of names (usually underscore prepended) and values. New in v1.4")
         .def("set_omega", &LibXCFunctional::set_omega, "docstring")
         .def("set_density_cutoff", &LibXCFunctional::set_density_cutoff, "docstring")
         .def("density_cutoff", &LibXCFunctional::density_cutoff, "docstring")
@@ -302,12 +309,20 @@ void export_functional(py::module &m) {
 
     py::class_<sapt::FDDS_Dispersion, std::shared_ptr<sapt::FDDS_Dispersion>>(m, "FDDS_Dispersion", "docstring")
         .def(py::init<std::shared_ptr<BasisSet>, std::shared_ptr<BasisSet>, std::map<std::string, SharedMatrix>,
-                      std::map<std::string, SharedVector>>())
+                      std::map<std::string, SharedVector>, bool>())
         .def("metric", &sapt::FDDS_Dispersion::metric, "Obtains the FDDS metric.")
         .def("metric_inv", &sapt::FDDS_Dispersion::metric_inv, "Obtains the FDDS metric_inv.")
         .def("aux_overlap", &sapt::FDDS_Dispersion::aux_overlap, "Obtains the FDDS aux_overlap.")
         .def("project_densities", &sapt::FDDS_Dispersion::project_densities,
              "Projects a density from the primary AO to auxiliary AO space.")
         .def("form_unc_amplitude", &sapt::FDDS_Dispersion::form_unc_amplitude,
-             "Forms the uncoupled amplitudes for either monomer.");
+             "Forms the uncoupled amplitudes for either monomer.")
+        .def("get_tensor_pqQ", &sapt::FDDS_Dispersion::get_tensor_pqQ,
+             "Debug only: fetches 3-index intermediate from disk and return as matrix.")
+        .def("print_tensor_pqQ", &sapt::FDDS_Dispersion::print_tensor_pqQ,
+             "Debug only: prints formatted 3-index intermediate to file.")
+        .def("form_aux_matrices", &sapt::FDDS_Dispersion::form_aux_matrices,
+             "Forms the uncoupled amplitudes and other matrices for either monomer.")
+        .def("R_A", &sapt::FDDS_Dispersion::R_A, "Obtains (R^t)^-1 for monomer A.")
+        .def("R_B", &sapt::FDDS_Dispersion::R_B, "Obtains (R^t)^-1 for monomer B.");
 }

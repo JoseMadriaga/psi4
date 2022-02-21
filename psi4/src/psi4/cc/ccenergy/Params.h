@@ -3,7 +3,7 @@
  *
  * Psi4: an open-source quantum chemistry software package
  *
- * Copyright (c) 2007-2019 The Psi4 Developers.
+ * Copyright (c) 2007-2021 The Psi4 Developers.
  *
  * The copyrights for code used from other parties are included in
  * the corresponding files.
@@ -79,6 +79,13 @@ struct Params {
     double scscc_scale_ss;
     int newtrips;
     int df;
+    std::string local_cc_method;
+    double local_cc_cutoff;
+    int local_cc_weakp;
+    int local_cc_filter_singles;
+    double omega;
+    int nomega;
+    
 };
 
 }  // namespace ccenergy

@@ -3,7 +3,7 @@
  *
  * Psi4: an open-source quantum chemistry software package
  *
- * Copyright (c) 2007-2019 The Psi4 Developers.
+ * Copyright (c) 2007-2021 The Psi4 Developers.
  *
  * The copyrights for code used from other parties are included in
  * the corresponding files.
@@ -103,48 +103,48 @@ double SAPT0::compute_energy() {
     psio_->open(PSIF_SAPT_BB_DF_INTS, PSIO_OPEN_NEW);
     psio_->open(PSIF_SAPT_AB_DF_INTS, PSIO_OPEN_NEW);
 
-    timer_on("DF Integrals       ");
+    timer_on("SAPT0: DF Integrals");
     if (aio_dfints_)
         df_integrals_aio();
     else
         df_integrals();
-    timer_off("DF Integrals       ");
-    timer_on("W Integrals        ");
+    timer_off("SAPT0: DF Integrals");
+    timer_on("SAPT0: W Integrals");
     w_integrals();
-    timer_off("W Integrals        ");
+    timer_off("SAPT0: W Integrals");
     if (!elst_basis_) {
         if (do_e10_) {
-            timer_on("Elst10             ");
+            timer_on("SAPT0: Elst10");
             elst10();
-            timer_off("Elst10             ");
-            timer_on("Exch10             ");
+            timer_off("SAPT0: Elst10");
+            timer_on("SAPT0: Exch10");
             exch10();
-            timer_off("Exch10             ");
-            timer_on("Exch10 S^2         ");
+            timer_off("SAPT0: Exch10");
+            timer_on("SAPT0: Exch10 S^2");
             exch10_s2();
-            timer_off("Exch10 S^2         ");
+            timer_off("SAPT0: Exch10 S^2");
         }
     }
     if (do_e20ind_) {
-        timer_on("Ind20              ");
+        timer_on("SAPT0: Ind20");
         if (debug_ || no_response_) ind20();
         if (!no_response_) ind20r();
-        timer_off("Ind20              ");
-        timer_on("Exch-Ind20         ");
+        timer_off("SAPT0: Ind20");
+        timer_on("SAPT0: Exch-Ind20");
         exch_ind20A_B();
         exch_ind20B_A();
-        timer_off("Exch-Ind20         ");
+        timer_off("SAPT0: Exch-Ind20");
     }
     if (do_e20disp_) {
         if (debug_) disp20();
-        timer_on("Exch-Disp20 N^5    ");
+        timer_on("SAPT0: Exch-Disp20 N^5");
         psio_->open(PSIF_SAPT_TEMP, PSIO_OPEN_NEW);
         exch_disp20_n5();
-        timer_off("Exch-Disp20 N^5    ");
-        timer_on("Exch-Disp20 N^4    ");
+        timer_off("SAPT0: Exch-Disp20 N^5");
+        timer_on("SAPT0: Exch-Disp20 N^4");
         exch_disp20_n4();
         psio_->close(PSIF_SAPT_TEMP, 0);
-        timer_off("Exch-Disp20 N^4    ");
+        timer_off("SAPT0: Exch-Disp20 N^4");
     }
 
     if (!options_.get_bool("SAPT_QUIET")) {
@@ -599,6 +599,7 @@ void SAPT0::df_integrals() {
 
                         if (sqrt(Schwartz[MUNU] * DFSchwartz[Pshell]) > schwarz_) {
                             eri[rank]->compute_shell(Pshell, 0, MU, NU);
+                            const auto *buffer = eri[rank]->buffers()[0];
 
                             if (MU != NU) {
                                 for (int P = 0, index = 0; P < numPshell; ++P) {
@@ -610,7 +611,7 @@ void SAPT0::df_integrals() {
                                         for (int nu = 0; nu < numnu; ++nu, ++index, ++munu) {
                                             int onu = basisset_->shell(NU).function_index() + nu;
 
-                                            AO_RI[munu + munu_offset][oP] = eri[rank]->buffer()[index];
+                                            AO_RI[munu + munu_offset][oP] = buffer[index];
                                         }
                                     }
                                 }
@@ -625,7 +626,7 @@ void SAPT0::df_integrals() {
                                             int onu = basisset_->shell(NU).function_index() + nu;
                                             int index = P * nummu * nummu + mu * nummu + nu;
 
-                                            AO_RI[munu + munu_offset][oP] = eri[rank]->buffer()[index];
+                                            AO_RI[munu + munu_offset][oP] = buffer[index];
                                         }
                                     }
                                 }

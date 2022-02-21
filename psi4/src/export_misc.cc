@@ -3,7 +3,7 @@
  *
  * Psi4: an open-source quantum chemistry software package
  *
- * Copyright (c) 2007-2019 The Psi4 Developers.
+ * Copyright (c) 2007-2021 The Psi4 Developers.
  *
  * The copyrights for code used from other parties are included in
  * the corresponding files.
@@ -39,4 +39,5 @@ void export_misc(py::module &m) {
     m.def("timer_off", timer_off, "Stop timer of label argument");
     m.def("tstart", tstart, "docstring");
     m.def("tstop", tstop, "docstring");
+    m.def("clean_timers", clean_timers, "Reinitialize timers for independent timer.dat entries. Vital when earlier independent calc finished improperly.");
 }

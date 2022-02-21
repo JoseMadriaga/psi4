@@ -3,7 +3,7 @@
  *
  * Psi4: an open-source quantum chemistry software package
  *
- * Copyright (c) 2007-2019 The Psi4 Developers.
+ * Copyright (c) 2007-2021 The Psi4 Developers.
  *
  * The copyrights for code used from other parties are included in
  * the corresponding files.
@@ -33,9 +33,9 @@
 #include <cstdio>
 #include <cstring>
 #include "psi4/libdpd/dpd.h"
+#include "psi4/cc/ccenergy/Local.h"
 #include "MOInfo.h"
 #include "Params.h"
-#include "Local.h"
 #define EXTERN
 #include "globals.h"
 
@@ -43,7 +43,6 @@ namespace psi {
 namespace ccresponse {
 
 void denom2(dpdbuf4 *X2, double omega);
-void local_filter_T2(dpdbuf4 *T2);
 
 void cc2_X2_build(const char *pert, int irrep, double omega) {
     dpdfile2 X1, z, F, t1;
@@ -130,8 +129,12 @@ void cc2_X2_build(const char *pert, int irrep, double omega) {
     global_dpd_->buf4_close(&X2);
 
     /** Filter and apply denominator **/
-    if (params.local)
-        local_filter_T2(&X2new);
+    if (params.local) {
+        Local_cc local_;
+        local_.nocc = moinfo.occpi[0];
+        local_.nvir = moinfo.virtpi[0];
+        local_.local_filter_T2(&X2new);
+    }
     else
         denom2(&X2new, omega);
     global_dpd_->buf4_close(&X2new);

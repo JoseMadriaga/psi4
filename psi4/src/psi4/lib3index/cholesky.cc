@@ -3,7 +3,7 @@
  *
  * Psi4: an open-source quantum chemistry software package
  *
- * Copyright (c) 2007-2019 The Psi4 Developers.
+ * Copyright (c) 2007-2021 The Psi4 Developers.
  *
  * The copyrights for code used from other parties are included in
  * the corresponding files.
@@ -163,12 +163,12 @@ CholeskyERI::CholeskyERI(std::shared_ptr<TwoBodyAOInt> integral, double schwarz,
     basisset_ = integral_->basis();
 }
 CholeskyERI::~CholeskyERI() {}
-size_t CholeskyERI::N() { return basisset_->nbf() * basisset_->nbf(); }
+size_t CholeskyERI::N() { return static_cast<size_t>(basisset_->nbf()) * basisset_->nbf(); }
 void CholeskyERI::compute_diagonal(double* target) {
-    const double* buffer = integral_->buffer();
     for (size_t M = 0; M < basisset_->nshell(); M++) {
         for (size_t N = 0; N < basisset_->nshell(); N++) {
             integral_->compute_shell(M, N, M, N);
+            const double* buffer = integral_->buffer();
 
             size_t nM = basisset_->shell(M).nfunction();
             size_t nN = basisset_->shell(N).nfunction();
@@ -199,10 +199,10 @@ void CholeskyERI::compute_row(int row, double* target) {
     size_t os = s - sstart;
     int nshell = basisset_->nshell();
 
-    const double* buffer = integral_->buffer();
     for (size_t M = 0; M < basisset_->nshell(); M++) {
         for (size_t N = M; N < basisset_->nshell(); N++) {
             integral_->compute_shell(M, N, R, S);
+            const double* buffer = integral_->buffer();
 
             size_t nM = basisset_->shell(M).nfunction();
             size_t nN = basisset_->shell(N).nfunction();
@@ -265,7 +265,7 @@ CholeskyDelta::CholeskyDelta(std::shared_ptr<Vector> eps_aocc, std::shared_ptr<V
                              size_t memory)
     : eps_aocc_(eps_aocc), eps_avir_(eps_avir), Cholesky(delta, memory) {}
 CholeskyDelta::~CholeskyDelta() {}
-size_t CholeskyDelta::N() { return eps_aocc_->dimpi()[0] * eps_avir_->dimpi()[0]; }
+size_t CholeskyDelta::N() { return static_cast<size_t>(eps_aocc_->dimpi()[0]) * eps_avir_->dimpi()[0]; }
 void CholeskyDelta::compute_diagonal(double* target) {
     size_t naocc = eps_aocc_->dimpi()[0];
     size_t navir = eps_avir_->dimpi()[0];

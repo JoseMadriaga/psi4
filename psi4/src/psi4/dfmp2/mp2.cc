@@ -3,7 +3,7 @@
  *
  * Psi4: an open-source quantum chemistry software package
  *
- * Copyright (c) 2007-2019 The Psi4 Developers.
+ * Copyright (c) 2007-2021 The Psi4 Developers.
  *
  * The copyrights for code used from other parties are included in
  * the corresponding files.
@@ -46,7 +46,6 @@
 #include "psi4/libmints/mintshelper.h"
 #include "psi4/libmints/molecule.h"
 #include "psi4/libmints/oeprop.h"
-#include "psi4/libmints/sieve.h"
 #include "psi4/libmints/twobody.h"
 #include "psi4/libmints/vector.h"
 #include "psi4/libpsi4util/PsiOutStream.h"
@@ -587,7 +586,7 @@ void DFMP2::apply_gamma(size_t file, size_t naux, size_t nia) {
     // Tensor blocks
     auto Gia = std::make_shared<Matrix>("G(ia|Q)", max_nia, naux);
     auto Cia = std::make_shared<Matrix>("C(ia|Q)", max_nia, naux);
-    auto G = std::make_shared<Matrix>("g", naux, naux);
+    auto G = std::make_shared<Matrix>("G_PQ", naux, naux);
     double** Giap = Gia->pointer();
     double** Ciap = Cia->pointer();
     double** Gp = G->pointer();
@@ -619,7 +618,7 @@ void DFMP2::apply_gamma(size_t file, size_t naux, size_t nia) {
         timer_off("DFMP2 g");
     }
 
-    psio_->write_entry(file, "G_PQ", (char*)Gp[0], sizeof(double) * naux * naux);
+    G->save(psio_, file, Matrix::SaveType::SubBlocks);
 
     psio_->close(file, 1);
 }
@@ -854,11 +853,6 @@ void RDFMP2::print_header() {
     outfile->Printf("\t --------------------------------------------------------\n\n");
 }
 void RDFMP2::form_Aia() {
-    // Schwarz Sieve
-    auto sieve = std::make_shared<ERISieve>(basisset_, options_.get_double("INTS_TOLERANCE"));
-    const std::vector<std::pair<int, int> >& shell_pairs = sieve->shell_pairs();
-    const size_t npairs = shell_pairs.size();
-
     // ERI objects
     int nthread = 1;
 #ifdef _OPENMP
@@ -868,7 +862,6 @@ void RDFMP2::form_Aia() {
         nthread = options_.get_int("DF_INTS_NUM_THREADS");
     }
 #endif
-
     std::shared_ptr<IntegralFactory> factory(
         new IntegralFactory(ribasis_, BasisSet::zero_ao_basis_set(), basisset_, basisset_));
     std::vector<std::shared_ptr<TwoBodyAOInt> > eri;
@@ -877,6 +870,10 @@ void RDFMP2::form_Aia() {
         eri.push_back(std::shared_ptr<TwoBodyAOInt>(factory->eri()));
         buffer.push_back(eri[thread]->buffer());
     }
+
+    // Schwarz Sieve
+    const std::vector<std::pair<int, int> >& shell_pairs = eri[0]->shell_pairs();
+    const size_t npairs = shell_pairs.size();
 
     // Sizing
     int nso = basisset_->nbf();
@@ -963,6 +960,7 @@ void RDFMP2::form_Aia() {
             int sn = basisset_->shell(N).function_index();
 
             eri[thread]->compute_shell(Q, 0, M, N);
+            buffer[thread] = eri[thread]->buffer();
 
             for (int oq = 0; oq < nq; oq++) {
                 for (int om = 0; om < nm; om++) {
@@ -1153,8 +1151,8 @@ void RDFMP2::form_Pab() {
 #endif
 
     // Memory
-    size_t doubles = ((size_t)(options_.get_double("DFMP2_MEM_FACTOR") * memory_ / 8L));
-    doubles -= navir * navir;
+    size_t doubles = static_cast<size_t>(options_.get_double("DFMP2_MEM_FACTOR") * memory_ / 8L);
+    doubles -= static_cast<double>(navir) * static_cast<double>(navir);
     double C = -(double)doubles;
     double B = 4.0 * navir * naux;
     double A = 2.0 * navir * (double)navir;
@@ -1349,7 +1347,7 @@ void RDFMP2::form_Pij() {
 #endif
 
     // Memory
-    size_t doubles = ((size_t)(options_.get_double("DFMP2_MEM_FACTOR") * memory_ / 8L));
+    size_t doubles = static_cast<size_t>(options_.get_double("DFMP2_MEM_FACTOR") * memory_ / 8L);
     doubles -= naocc * naocc;
     double C = -(double)doubles;
     double B = 2.0 * naocc * naux;
@@ -1359,7 +1357,7 @@ void RDFMP2::form_Pij() {
     if (max_a <= 0) {
         throw PSIEXCEPTION("Not enough memory in DFMP2");
     }
-    max_a = (max_a <= 0 ? 1 : max_a);
+
     max_a = (max_a > navir ? navir : max_a);
 
     // Blocks
@@ -1424,7 +1422,7 @@ void RDFMP2::form_Pij() {
                 ::memcpy((void*)Bjbp[0], (void*)Biap[0], sizeof(double) * (na * naocc * naux));
             } else {
                 next_BAI = psio_get_address(PSIO_ZERO, sizeof(double) * (bstart * naocc * naux));
-                psio_->read(PSIF_DFMP2_AIA, "(Q|ai)", (char*)Bjbp[0], sizeof(double) * (nb * naocc * naux), next_BAI,
+                psio_->read(PSIF_DFMP2_AIA, "B(ai|Q)", (char*)Bjbp[0], sizeof(double) * (nb * naocc * naux), next_BAI,
                             &next_BAI);
             }
             timer_off("DFMP2 Qai Read");
@@ -1504,11 +1502,8 @@ void RDFMP2::form_G_transpose() {
 void RDFMP2::form_AB_x_terms() {
     auto naux = ribasis_->nbf();
 
-    auto V = std::make_shared<Matrix>("V", naux, naux);
-    auto Vp = V->pointer();
-    psio_->open(PSIF_DFMP2_AIA, PSIO_OPEN_OLD);
-    psio_->read_entry(PSIF_DFMP2_AIA, "G_PQ", (char*)Vp[0], sizeof(double) * naux * naux);
-    psio_->close(PSIF_DFMP2_AIA, 1);
+    auto V = std::make_shared<Matrix>("G_PQ", naux, naux);
+    V->load(psio_, PSIF_DFMP2_AIA, Matrix::SaveType::SubBlocks);
     V->hermitivitize();
     V->scale(2);
     std::map<std::string, SharedMatrix> densities = {{"(A|B)^x", V}};
@@ -1529,10 +1524,24 @@ void RDFMP2::form_Amn_x_terms() {
     int nia = Caocc_->colspi()[0] * Cavir_->colspi()[0];
     int naux = ribasis_->nbf();
 
-    // => ERI Sieve <= //
+    // => Thread Count <= //
 
-    auto sieve = std::make_shared<ERISieve>(basisset_, options_.get_double("INTS_TOLERANCE"));
-    const std::vector<std::pair<int, int> >& shell_pairs = sieve->shell_pairs();
+    int num_threads = 1;
+#ifdef _OPENMP
+    num_threads = Process::environment.get_n_threads();
+#endif
+
+    // => Integrals <= //
+
+    std::shared_ptr<IntegralFactory> rifactory =
+        std::make_shared<IntegralFactory>(ribasis_, BasisSet::zero_ao_basis_set(), basisset_, basisset_);
+    std::vector<std::shared_ptr<TwoBodyAOInt> > eri;
+    for (int t = 0; t < num_threads; t++) {
+        eri.push_back(std::shared_ptr<TwoBodyAOInt>(rifactory->eri(1)));
+    }
+
+    // => ERI Sieve <= //
+    const std::vector<std::pair<int, int> >& shell_pairs = eri[0]->shell_pairs();
     int npairs = shell_pairs.size();
 
     // => Gradient Contribution <= //
@@ -1582,22 +1591,6 @@ void RDFMP2::form_Amn_x_terms() {
     double** Caoccp = Caocc_->pointer();
     double** Cavirp = Cavir_->pointer();
 
-    // => Thread Count <= //
-
-    int num_threads = 1;
-#ifdef _OPENMP
-    num_threads = Process::environment.get_n_threads();
-#endif
-
-    // => Integrals <= //
-
-    std::shared_ptr<IntegralFactory> rifactory =
-        std::make_shared<IntegralFactory>(ribasis_, BasisSet::zero_ao_basis_set(), basisset_, basisset_);
-    std::vector<std::shared_ptr<TwoBodyAOInt> > eri;
-    for (int t = 0; t < num_threads; t++) {
-        eri.push_back(std::shared_ptr<TwoBodyAOInt>(rifactory->eri(1)));
-    }
-
     // => Temporary Gradients <= //
 
     std::vector<SharedMatrix> Ktemps;
@@ -1641,7 +1634,7 @@ void RDFMP2::form_Amn_x_terms() {
 
 // > Integrals < //
 #pragma omp parallel for schedule(dynamic) num_threads(num_threads)
-        for (long int PMN = 0L; PMN < NP * npairs; PMN++) {
+        for (long int PMN = 0L; PMN < static_cast<long int>(NP) * npairs; PMN++) {
             int thread = 0;
 #ifdef _OPENMP
             thread = omp_get_thread_num();
@@ -1655,6 +1648,7 @@ void RDFMP2::form_Amn_x_terms() {
             eri[thread]->compute_shell_deriv1(P, 0, M, N);
 
             const double* buffer = eri[thread]->buffer();
+            const auto &buffers = eri[thread]->buffers();
 
             int nP = ribasis_->shell(P).nfunction();
             int cP = ribasis_->shell(P).ncartesian();
@@ -1671,16 +1665,15 @@ void RDFMP2::form_Amn_x_terms() {
             int aN = basisset_->shell(N).ncenter();
             int oN = basisset_->shell(N).function_index();
 
-            int ncart = cP * cM * cN;
-            const double* Px = buffer + 0 * ncart;
-            const double* Py = buffer + 1 * ncart;
-            const double* Pz = buffer + 2 * ncart;
-            const double* Mx = buffer + 3 * ncart;
-            const double* My = buffer + 4 * ncart;
-            const double* Mz = buffer + 5 * ncart;
-            const double* Nx = buffer + 6 * ncart;
-            const double* Ny = buffer + 7 * ncart;
-            const double* Nz = buffer + 8 * ncart;
+            const double* Px = buffers[0];
+            const double* Py = buffers[1];
+            const double* Pz = buffers[2];
+            const double* Mx = buffers[3];
+            const double* My = buffers[4];
+            const double* Mz = buffers[5];
+            const double* Nx = buffers[6];
+            const double* Ny = buffers[7];
+            const double* Nz = buffers[8];
 
             double perm = (M == N ? 1.0 : 2.0);
 
@@ -1734,29 +1727,44 @@ void RDFMP2::form_L() {
     int nia = Caocc_->colspi()[0] * Cavir_->colspi()[0];
     int naux = ribasis_->nbf();
 
+    // => Thread Count <= //
+
+    int num_threads = 1;
+#ifdef _OPENMP
+    num_threads = Process::environment.get_n_threads();
+#endif
+
+    // => Integrals <= //
+
+    std::shared_ptr<IntegralFactory> rifactory =
+        std::make_shared<IntegralFactory>(ribasis_, BasisSet::zero_ao_basis_set(), basisset_, basisset_);
+    std::vector<std::shared_ptr<TwoBodyAOInt> > eri;
+    for (int t = 0; t < num_threads; t++) {
+        eri.push_back(std::shared_ptr<TwoBodyAOInt>(rifactory->eri()));
+    }
+
     // => ERI Sieve <= //
 
-    auto sieve = std::make_shared<ERISieve>(basisset_, options_.get_double("INTS_TOLERANCE"));
-    const std::vector<std::pair<int, int> >& shell_pairs = sieve->shell_pairs();
+    const std::vector<std::pair<int, int> >& shell_pairs = eri[0]->shell_pairs();
     int npairs = shell_pairs.size();
 
     // => Memory Constraints <= //
 
-    size_t memory = ((size_t)(options_.get_double("DFMP2_MEM_FACTOR") * memory_ / 8L));
-    memory -= naocc * nso;
-    memory -= navir * nso;
-    memory -= naocc * navir;
+    size_t memory = static_cast<size_t>((options_.get_double("DFMP2_MEM_FACTOR") * memory_ / 8L));
+    memory -= static_cast<size_t>(naocc) * static_cast<size_t>(nso);
+    memory -= static_cast<size_t>(navir) * static_cast<size_t>(nso);
+    memory -= static_cast<size_t>(naocc) * static_cast<size_t>(navir);
     int max_rows;
     int maxP = ribasis_->max_function_per_shell();
     size_t row_cost = 0L;
-    row_cost += nso * (size_t)nso;
-    row_cost += nso * (size_t)naocc;
-    row_cost += nso * (size_t)navir;
-    row_cost += naocc * (size_t)navir;
+    row_cost += static_cast<size_t>(nso)   * static_cast<size_t>(nso);
+    row_cost += static_cast<size_t>(nso)   * static_cast<size_t>(naocc);
+    row_cost += static_cast<size_t>(nso)   * static_cast<size_t>(navir);
+    row_cost += static_cast<size_t>(naocc) * static_cast<size_t>(navir);
     size_t rows = memory / row_cost;
     rows = (rows > naux ? naux : rows);
     rows = (rows < maxP ? maxP : rows);
-    max_rows = (int)rows;
+    max_rows = static_cast<int>(rows);
 
     // => Block Sizing <= //
 
@@ -1798,22 +1806,6 @@ void RDFMP2::form_L() {
     auto Lmip = Lmi->pointer();
     auto Lmap = Lma->pointer();
 
-    // => Thread Count <= //
-
-    int num_threads = 1;
-#ifdef _OPENMP
-    num_threads = Process::environment.get_n_threads();
-#endif
-
-    // => Integrals <= //
-
-    std::shared_ptr<IntegralFactory> rifactory =
-        std::make_shared<IntegralFactory>(ribasis_, BasisSet::zero_ao_basis_set(), basisset_, basisset_);
-    std::vector<std::shared_ptr<TwoBodyAOInt> > eri;
-    for (int t = 0; t < num_threads; t++) {
-        eri.push_back(std::shared_ptr<TwoBodyAOInt>(rifactory->eri()));
-    }
-
     // => PSIO <= //
 
     psio_->open(PSIF_DFMP2_AIA, PSIO_OPEN_OLD);
@@ -1839,7 +1831,7 @@ void RDFMP2::form_L() {
         // > Integrals < //
         Gmn->zero();
 #pragma omp parallel for schedule(dynamic) num_threads(num_threads)
-        for (long int PMN = 0L; PMN < NP * npairs; PMN++) {
+        for (long int PMN = 0L; PMN < static_cast<long int>(NP) * npairs; PMN++) {
             int thread = 0;
 #ifdef _OPENMP
             thread = omp_get_thread_num();
@@ -2710,11 +2702,6 @@ void UDFMP2::print_header() {
     outfile->Printf("\t --------------------------------------------------------\n\n");
 }
 void UDFMP2::form_Aia() {
-    // Schwarz Sieve
-    auto sieve = std::make_shared<ERISieve>(basisset_, options_.get_double("INTS_TOLERANCE"));
-    const auto& shell_pairs = sieve->shell_pairs();
-    const size_t npairs = shell_pairs.size();
-
     // ERI objects
     int nthread = 1;
 #ifdef _OPENMP
@@ -2733,6 +2720,10 @@ void UDFMP2::form_Aia() {
         eri.push_back(std::shared_ptr<TwoBodyAOInt>(factory->eri()));
         buffer.push_back(eri[thread]->buffer());
     }
+
+    // Schwarz Sieve
+    const auto& shell_pairs = eri[0]->shell_pairs();
+    const size_t npairs = shell_pairs.size();
 
     // Sizing
     int nso = basisset_->nbf();
@@ -2827,6 +2818,7 @@ void UDFMP2::form_Aia() {
             int sn = basisset_->shell(N).function_index();
 
             eri[thread]->compute_shell(Q, 0, M, N);
+            buffer[thread] = eri[thread]->buffer();
 
             for (int oq = 0; oq < nq; oq++) {
                 for (int om = 0; om < nm; om++) {

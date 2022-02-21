@@ -3,7 +3,7 @@
  *
  * Psi4: an open-source quantum chemistry software package
  *
- * Copyright (c) 2007-2019 The Psi4 Developers.
+ * Copyright (c) 2007-2021 The Psi4 Developers.
  *
  * The copyrights for code used from other parties are included in
  * the corresponding files.
@@ -415,7 +415,7 @@ void MintsHelper::one_body_ao_computer(std::vector<std::shared_ptr<OneBodyAOInt>
     std::shared_ptr<BasisSet> bs1 = ints[0]->basis1();
     std::shared_ptr<BasisSet> bs2 = ints[0]->basis2();
 
-    // Limit to the number of incoming onbody ints
+    // Limit to the number of incoming onebody ints
     size_t nthread = nthread_;
     if (nthread > ints.size()) {
         nthread = ints.size();
@@ -797,13 +797,13 @@ SharedMatrix MintsHelper::ao_helper(const std::string &label, std::shared_ptr<Tw
 
     auto I = std::make_shared<Matrix>(label, nbf1 * nbf2, nbf3 * nbf4);
     double **Ip = I->pointer();
-    const double *buffer = ints->buffer();
 
     for (int M = 0; M < bs1->nshell(); M++) {
         for (int N = 0; N < bs2->nshell(); N++) {
             for (int P = 0; P < bs3->nshell(); P++) {
                 for (int Q = 0; Q < bs4->nshell(); Q++) {
                     ints->compute_shell(M, N, P, Q);
+                    const double *buffer = ints->buffer();
 
                     for (int m = 0, index = 0; m < bs1->shell(M).nfunction(); m++) {
                         for (int n = 0; n < bs2->shell(N).nfunction(); n++) {
@@ -836,9 +836,9 @@ SharedMatrix MintsHelper::ao_shell_getter(const std::string &label, std::shared_
     int qfxn = basisset_->shell(Q).nfunction();
     auto I = std::make_shared<Matrix>(label, mfxn * nfxn, pfxn * qfxn);
     double **Ip = I->pointer();
-    const double *buffer = ints->buffer();
 
     ints->compute_shell(M, N, P, Q);
+    const double *buffer = ints->buffer();
 
     for (int m = 0, index = 0; m < mfxn; m++) {
         for (int n = 0; n < nfxn; n++) {
@@ -947,12 +947,12 @@ SharedMatrix MintsHelper::ao_3coverlap_helper(const std::string &label, std::sha
 
     auto I = std::make_shared<Matrix>(label, nbf1 * nbf2, nbf3);
     double **Ip = I->pointer();
-    const double *buffer = ints->buffer();
 
     for (int M = 0; M < bs1->nshell(); M++) {
         for (int N = 0; N < bs2->nshell(); N++) {
             for (int P = 0; P < bs3->nshell(); P++) {
                 ints->compute_shell(M, N, P);
+                const double *buffer = ints->buffer();
                 int Mfi = bs1->shell(M).function_index();
                 int Nfi = bs2->shell(N).function_index();
                 int Pfi = bs3->shell(P).function_index();
@@ -2296,7 +2296,7 @@ SharedMatrix MintsHelper::core_hamiltonian_grad(SharedMatrix D) {
 
 std::map<std::string, SharedMatrix> MintsHelper::metric_grad(std::map<std::string, SharedMatrix>& D, const std::string& aux_name) {
     // Construct integral factory.
-    auto auxiliary = basissets_[aux_name];
+    auto auxiliary = get_basisset(aux_name);
     auto rifactory = std::make_shared<IntegralFactory>(auxiliary, BasisSet::zero_ao_basis_set(), auxiliary, BasisSet::zero_ao_basis_set());
     std::vector<std::shared_ptr<TwoBodyAOInt> > Jint;
     for (int t = 0; t < nthread_; t++) {
@@ -2314,7 +2314,7 @@ std::map<std::string, SharedMatrix> MintsHelper::metric_grad(std::map<std::strin
         }
     }
 
-    // Construct pairs of aux AOs
+    // Construct pairs of aux AO shells
     std::vector<std::pair<int, int>> PQ_pairs;
     for (int P = 0; P < auxiliary->nshell(); P++) {
         for (auto Q = 0; Q <= P; Q++) {
@@ -2332,7 +2332,7 @@ std::map<std::string, SharedMatrix> MintsHelper::metric_grad(std::map<std::strin
         thread = omp_get_thread_num();
 #endif
         Jint[thread]->compute_shell_deriv1(P, 0, Q, 0);
-        const auto buffer = Jint[thread]->buffer();
+        const auto buffers = Jint[thread]->buffers();
 
         int nP = auxiliary->shell(P).nfunction();
         int cP = auxiliary->shell(P).ncartesian();
@@ -2345,12 +2345,12 @@ std::map<std::string, SharedMatrix> MintsHelper::metric_grad(std::map<std::strin
         int oQ = auxiliary->shell(Q).function_index();
 
         int ncart = cP * cQ;
-        const double *Px = buffer + 0*ncart;
-        const double *Py = buffer + 1*ncart;
-        const double *Pz = buffer + 2*ncart;
-        const double *Qx = buffer + 3*ncart;
-        const double *Qy = buffer + 4*ncart;
-        const double *Qz = buffer + 5*ncart;
+        const double *Px = buffers[0];
+        const double *Py = buffers[1];
+        const double *Pz = buffers[2];
+        const double *Qx = buffers[3];
+        const double *Qy = buffers[4];
+        const double *Qz = buffers[5];
 
         double perm = (P == Q ? 1.0 : 2.0);
 
@@ -2395,6 +2395,173 @@ std::map<std::string, SharedMatrix> MintsHelper::metric_grad(std::map<std::strin
         gradient_contributions[kv.first] = gradient_contribution;
     }
     return gradient_contributions;
+}
+
+// TODO: DFMP2 might be able to use this, if we resolve the following:
+//  1. Should we move density back transform into this loop?
+//  2. Should we explicitly hermitivitize during contraction against derivative integral?
+//  3. Can we force a relation between intermed_name and gradient_name, to simplify the argument list?
+SharedMatrix MintsHelper::three_idx_grad(const std::string& aux_name, const std::string& intermed_name, const std::string& gradient_name) {
+    // Construct integral factory.
+    auto primary = get_basisset("ORBITAL");
+    auto auxiliary = get_basisset(aux_name);
+    auto rifactory = std::make_shared<IntegralFactory>(auxiliary, BasisSet::zero_ao_basis_set(), primary, primary);
+    std::vector<std::shared_ptr<TwoBodyAOInt> > Jint;
+    for (int t = 0; t < nthread_; t++) {
+        Jint.push_back(std::shared_ptr<TwoBodyAOInt>(rifactory->eri(1)));
+    }
+
+    const auto &shell_pairs = Jint[0]->shell_pairs();
+    int npairs = shell_pairs.size(); // Number of pairs of primary orbital shells
+
+    // => Memory Constraints <= //
+    const auto nprim = primary->nbf();
+    const auto naux = auxiliary->nbf();
+    const auto ntri = (nprim * (nprim + 1)) / 2;
+    auto row_cost = sizeof(double) * (nprim * nprim + ntri);
+    // Assume we can devote 80% of Psi's memory to this. 80% was pulled from a hat.
+    auto max_rows = 0.8 * Process::environment.get_memory() / row_cost;
+
+    // => Block Sizing <= //
+    std::vector<int> Pstarts;
+    int counter = 0;
+    Pstarts.push_back(0);
+    for (int P = 0; P < auxiliary->nshell(); P++) {
+        int nP = auxiliary->shell(P).nfunction();
+        if (counter + nP > max_rows) {
+            counter = 0;
+            Pstarts.push_back(P);
+        }
+        counter += nP;
+    }
+    Pstarts.push_back(auxiliary->nshell());
+
+    // Construct temporary matrices for each thread
+    int natom = basisset_->molecule()->natom();
+    std::vector<SharedMatrix> temps;
+    for (int j = 0; j < nthread_; j++) {
+        temps.push_back(std::make_shared<Matrix>("temp", natom, 3));
+    }
+
+    psio_address next_Pmn = PSIO_ZERO;
+    // Individual block reads may very well not use all of this memory.
+    auto temp = std::vector<double>(static_cast<size_t>(max_rows) * ntri);
+    auto data = temp.data();
+
+    // Perform threaded contraction of "densities" against 3-index derivative integrals.
+    // Loop over blocks. Each block is all (P|mn) belonging to certain aux. orbital shells.
+    // Large aux. basis sets may require multiple blocks.
+    for (int block = 0; block < Pstarts.size() - 1; block++) {
+        int Pstart = Pstarts[block];
+        int Pstop = Pstarts[block + 1];
+        int NP = Pstop - Pstart;
+
+        int pstart = auxiliary->shell(Pstart).function_index();
+        int pstop = (Pstop == auxiliary->nshell() ? naux : auxiliary->shell(Pstop).function_index());
+        int np = pstop - pstart;
+
+        // Read values from disk. We assume that only the "lower triangle" of (P|mn) is stored.
+        psio_->read(PSIF_AO_TPDM, intermed_name.c_str(), (char*)temp.data(), sizeof(double) * np * ntri, next_Pmn, &next_Pmn);
+
+        // Now get them into a matrix, not just the lower triangle.
+        // This is the price of only storing the lower triangle on disk.
+        auto idx3_matrix = std::make_shared<Matrix>(np, nprim * nprim);
+        auto idx3p = idx3_matrix->pointer();
+#pragma omp parallel for
+        for (int aux = 0; aux < np; aux++) {
+            for (int p = 0; p < nprim; p++) {
+                for (int q = 0; q <= p; q++) {
+                    idx3p[aux][p * nprim + q] = *data;
+                    idx3p[aux][q * nprim + p] = *data;
+                    data++;
+                }
+            }
+        }
+
+        // For each block, loop over aux. shell, then primary shell pairs
+#pragma omp parallel for schedule(dynamic) num_threads(nthread_)
+        for (long int PMN = 0L; PMN < static_cast<long int>(NP) * npairs; PMN++) {
+            int thread = 0;
+#ifdef _OPENMP
+            thread = omp_get_thread_num();
+#endif
+
+            int P = PMN / npairs + Pstart;
+            int MN = PMN % npairs;
+            int M = shell_pairs[MN].first;
+            int N = shell_pairs[MN].second;
+
+            Jint[thread]->compute_shell_deriv1(P, 0, M, N);
+
+            const auto& buffers = Jint[thread]->buffers();
+
+            int nP = auxiliary->shell(P).nfunction();
+            int cP = auxiliary->shell(P).ncartesian();
+            int aP = auxiliary->shell(P).ncenter();
+            int oP = auxiliary->shell(P).function_index() - pstart;
+
+            int nM = primary->shell(M).nfunction();
+            int cM = primary->shell(M).ncartesian();
+            int aM = primary->shell(M).ncenter();
+            int oM = primary->shell(M).function_index();
+
+            int nN = primary->shell(N).nfunction();
+            int cN = primary->shell(N).ncartesian();
+            int aN = primary->shell(N).ncenter();
+            int oN = primary->shell(N).function_index();
+
+            int ncart = cP * cM * cN;
+            const double *Px = buffers[0];
+            const double *Py = buffers[1];
+            const double *Pz = buffers[2];
+            const double *Mx = buffers[3];
+            const double *My = buffers[4];
+            const double *Mz = buffers[5];
+            const double *Nx = buffers[6];
+            const double *Ny = buffers[7];
+            const double *Nz = buffers[8];
+
+            double perm = (M == N ? 1.0 : 2.0);
+
+            auto grad_Jp = temps[thread]->pointer();
+
+            // Within each of those, then loop over each function in the shell. 
+            for (int p = 0; p < nP; p++) {
+                for (int m = 0; m < nM; m++) {
+                    for (int n = 0; n < nN; n++) {
+                        double Ival = 1.0 * perm * idx3p[p + oP][(m + oM) * nprim + (n + oN)];
+                        grad_Jp[aP][0] += Ival * (*Px);
+                        grad_Jp[aP][1] += Ival * (*Py);
+                        grad_Jp[aP][2] += Ival * (*Pz);
+                        grad_Jp[aM][0] += Ival * (*Mx);
+                        grad_Jp[aM][1] += Ival * (*My);
+                        grad_Jp[aM][2] += Ival * (*Mz);
+                        grad_Jp[aN][0] += Ival * (*Nx);
+                        grad_Jp[aN][1] += Ival * (*Ny);
+                        grad_Jp[aN][2] += Ival * (*Nz);
+
+                        Px++;
+                        Py++;
+                        Pz++;
+                        Mx++;
+                        My++;
+                        Mz++;
+                        Nx++;
+                        Ny++;
+                        Nz++;
+                    }
+                }
+            }
+        }
+    }
+
+    // Sum results across the various threads
+    auto idx3_grad = std::make_shared<Matrix>(intermed_name + " Gradient", natom, 3);
+    for (const auto& thread_contribution : temps) {
+        idx3_grad->add(thread_contribution);
+    }
+
+    return idx3_grad;
 }
 
 void MintsHelper::play() {}
@@ -3085,8 +3252,8 @@ std::vector<SharedMatrix> MintsHelper::ao_tei_deriv1(int atom, double omega,
         grad.push_back(std::make_shared<Matrix>(sstream.str(), nbf1 * nbf2, nbf3 * nbf4));
     }
 
-    const double *buffer = ints->buffer();
 
+    const auto &buffers = ints->buffers();
     for (int P = 0; P < bs1->nshell(); P++) {
         for (int Q = 0; Q < bs2->nshell(); Q++) {
             for (int R = 0; R < bs3->nshell(); R++) {
@@ -3111,7 +3278,6 @@ std::vector<SharedMatrix> MintsHelper::ao_tei_deriv1(int atom, double omega,
                     int Rcenter = bs3->shell(R).ncenter();
                     int Scenter = bs4->shell(S).ncenter();
 
-                    size_t stride = Pncart * Qncart * Rncart * Sncart;
                     size_t delta;
 
                     delta = 0L;
@@ -3135,19 +3301,18 @@ std::vector<SharedMatrix> MintsHelper::ao_tei_deriv1(int atom, double omega,
                                     int i = (Poff + p) * nbf2 + Qoff + q;
                                     int j = (Roff + r) * nbf4 + Soff + s;
 
-                                    Ax = buffer[0 * stride + delta];
-                                    Ay = buffer[1 * stride + delta];
-                                    Az = buffer[2 * stride + delta];
-                                    Cx = buffer[3 * stride + delta];
-                                    Cy = buffer[4 * stride + delta];
-                                    Cz = buffer[5 * stride + delta];
-                                    Dx = buffer[6 * stride + delta];
-                                    Dy = buffer[7 * stride + delta];
-                                    Dz = buffer[8 * stride + delta];
-
-                                    Bx = -(Ax + Cx + Dx);
-                                    By = -(Ay + Cy + Dy);
-                                    Bz = -(Az + Cz + Dz);
+                                    Ax = buffers[0][delta];
+                                    Ay = buffers[1][delta];
+                                    Az = buffers[2][delta];
+                                    Bx = buffers[3][delta];
+                                    By = buffers[4][delta];
+                                    Bz = buffers[5][delta];
+                                    Cx = buffers[6][delta];
+                                    Cy = buffers[7][delta];
+                                    Cz = buffers[8][delta];
+                                    Dx = buffers[9][delta];
+                                    Dy = buffers[10][delta];
+                                    Dz = buffers[11][delta];
 
                                     if (Pcenter == atom) {
                                         X += Ax;
@@ -3190,6 +3355,199 @@ std::vector<SharedMatrix> MintsHelper::ao_tei_deriv1(int atom, double omega,
 
     // Build numpy and final matrix shape
     std::vector<int> nshape{nbf1, nbf2, nbf3, nbf4};
+    for (int p = 0; p < 3; p++) grad[p]->set_numpy_shape(nshape);
+
+    return grad;
+}
+
+/* 1st and 2nd derivatives of metric in AO basis  */
+
+std::vector<SharedMatrix> MintsHelper::ao_metric_deriv1(int atom, const std::string& aux_name) {
+    std::array<std::string, 3> cartcomp{ {"X", "Y", "Z"} };
+
+    auto aux = get_basisset(aux_name);
+    auto factory = std::make_shared<IntegralFactory>(aux, BasisSet::zero_ao_basis_set(), aux, BasisSet::zero_ao_basis_set());
+
+    auto ints = std::shared_ptr<TwoBodyAOInt>(factory->eri(1));
+    auto naux = aux->nbf();
+    int natom = basisset_->molecule()->natom();
+
+    std::vector<SharedMatrix> grad;
+    for (int p = 0; p < 3; p++) {
+        std::stringstream sstream;
+        sstream << "ao_metric_deriv1_" << atom << cartcomp[p];
+        grad.push_back(std::make_shared<Matrix>(sstream.str(), naux, naux));
+    }
+
+
+    const auto &buffers = ints->buffers();
+    for (int P = 0; P < aux->nshell(); P++) {
+        for (int Q = 0; Q < aux->nshell(); Q++) {
+            int Psize = aux->shell(P).nfunction();
+            int Qsize = aux->shell(Q).nfunction();
+
+            int Poff = aux->shell(P).function_index();
+            int Qoff = aux->shell(Q).function_index();
+
+            int Pcenter = aux->shell(P).ncenter();
+            int Qcenter = aux->shell(Q).ncenter();
+
+            size_t delta;
+
+            delta = 0L;
+
+            if (Pcenter != atom && Qcenter != atom) continue;
+
+            if (Pcenter == atom && Qcenter == atom) continue;
+
+            ints->compute_shell_deriv1(P, 0, Q, 0);
+
+            double Ax, Ay, Az;
+            double Bx, By, Bz;
+            double X = 0, Y = 0, Z = 0;
+
+            for (int p = 0; p < Psize; p++) {
+                for (int q = 0; q < Qsize; q++) {
+                    int i = p + Poff;
+                    int j = q + Qoff;
+
+                    Ax = buffers[0][delta];
+                    Ay = buffers[1][delta];
+                    Az = buffers[2][delta];
+                    Bx = buffers[3][delta];
+                    By = buffers[4][delta];
+                    Bz = buffers[5][delta];
+
+                    if (Pcenter == atom) {
+                        X += Ax;
+                        Y += Ay;
+                        Z += Az;
+                    }
+
+                    if (Qcenter == atom) {
+                        X += Bx;
+                        Y += By;
+                        Z += Bz;
+                    }
+
+                    grad[0]->set(i, j, X);
+                    grad[1]->set(i, j, Y);
+                    grad[2]->set(i, j, Z);
+
+                    X = 0, Y = 0, Z = 0;
+                    delta++;
+                }
+            }
+        }
+    }
+
+    return grad;
+}
+
+/* 1st and 2nd derivatives of TEI in AO basis  */
+
+std::vector<SharedMatrix> MintsHelper::ao_3center_deriv1(int atom, const std::string& aux_name) {
+    std::array<std::string, 3> cartcomp{ {"X", "Y", "Z"} };
+
+    auto aux = get_basisset(aux_name);
+    auto factory = std::make_shared<IntegralFactory>(aux, BasisSet::zero_ao_basis_set(), basisset_, basisset_);
+
+    auto ints = std::shared_ptr<TwoBodyAOInt>(factory->eri(1));
+    auto naux = aux->nbf();
+    int natom = basisset_->molecule()->natom();
+
+    std::vector<SharedMatrix> grad;
+    for (int p = 0; p < 3; p++) {
+        std::stringstream sstream;
+        sstream << "ao_3center_deriv1_" << atom << cartcomp[p];
+        grad.push_back(std::make_shared<Matrix>(sstream.str(), naux, nbf() * nbf()));
+    }
+
+
+    const auto &buffers = ints->buffers();
+    for (int P = 0; P < aux->nshell(); P++) {
+        for (int Q = 0; Q < basisset_->nshell(); Q++) {
+            for (int R = 0; R < basisset_->nshell(); R++) {
+                int Psize = aux->shell(P).nfunction();
+                int Qsize = basisset_->shell(Q).nfunction();
+                int Rsize = basisset_->shell(R).nfunction();
+
+                int Pncart = aux->shell(P).ncartesian();
+                int Qncart = basisset_->shell(Q).ncartesian();
+                int Rncart = basisset_->shell(R).ncartesian();
+
+                int Poff = aux->shell(P).function_index();
+                int Qoff = basisset_->shell(Q).function_index();
+                int Roff = basisset_->shell(R).function_index();
+
+                int Pcenter = aux->shell(P).ncenter();
+                int Qcenter = basisset_->shell(Q).ncenter();
+                int Rcenter = basisset_->shell(R).ncenter();
+
+                size_t delta;
+
+                delta = 0L;
+
+                if (Pcenter != atom && Qcenter != atom && Rcenter != atom) continue;
+
+                if (Pcenter == atom && Qcenter == atom && Rcenter == atom) continue;
+
+                ints->compute_shell_deriv1(P, 0, Q, R);
+
+                double Ax, Ay, Az;
+                double Bx, By, Bz;
+                double Cx, Cy, Cz;
+                double X = 0, Y = 0, Z = 0;
+
+                for (int p = 0; p < Psize; p++) {
+                    for (int q = 0; q < Qsize; q++) {
+                        for (int r = 0; r < Rsize; r++) {
+                            int i = Poff + p;
+                            int j = (Qoff + q) * nbf() + Roff + r;
+
+                            Ax = buffers[0][delta];
+                            Ay = buffers[1][delta];
+                            Az = buffers[2][delta];
+                            Bx = buffers[3][delta];
+                            By = buffers[4][delta];
+                            Bz = buffers[5][delta];
+                            Cx = buffers[6][delta];
+                            Cy = buffers[7][delta];
+                            Cz = buffers[8][delta];
+
+                            if (Pcenter == atom) {
+                                X += Ax;
+                                Y += Ay;
+                                Z += Az;
+                            }
+
+                            if (Qcenter == atom) {
+                                X += Bx;
+                                Y += By;
+                                Z += Bz;
+                            }
+
+                            if (Rcenter == atom) {
+                                X += Cx;
+                                Y += Cy;
+                                Z += Cz;
+                            }
+
+                            grad[0]->set(i, j, X);
+                            grad[1]->set(i, j, Y);
+                            grad[2]->set(i, j, Z);
+
+                            X = 0, Y = 0, Z = 0;
+                            delta++;
+                    }
+                    }
+                }
+            }
+        }
+    }
+
+    // Build numpy and final matrix shape
+    std::vector<int> nshape{naux, nbf(), nbf()};
     for (int p = 0; p < 3; p++) grad[p]->set_numpy_shape(nshape);
 
     return grad;
@@ -3267,7 +3625,6 @@ std::vector<SharedMatrix> MintsHelper::ao_tei_deriv2(int atom1, int atom2) {
         int Rcenter = bs3->shell(R).ncenter();
         int Scenter = bs4->shell(S).ncenter();
 
-        size_t stride = Pncart * Qncart * Rncart * Sncart;
         size_t delta;
 
         delta = 0L;
@@ -3320,8 +3677,8 @@ std::vector<SharedMatrix> MintsHelper::ao_tei_deriv2(int atom1, int atom2) {
 #endif
 
         ints[thread]->compute_shell_deriv2(P, Q, R, S);
+        const auto& buffers = ints[thread]->buffers();
 
-        const double *buffer = ints[thread]->buffer();
         std::unordered_map<std::string, double> hess_map;
 
         for (int p = 0; p < Psize; p++) {
@@ -3330,119 +3687,94 @@ std::vector<SharedMatrix> MintsHelper::ao_tei_deriv2(int atom1, int atom2) {
                     for (int s = 0; s < Ssize; s++) {
                         int i = (Poff + p) * nbf2 + Qoff + q;
                         int j = (Roff + r) * nbf4 + Soff + s;
-
-                        hess_map["AxAx"] = buffer[9 * stride + delta];
-                        hess_map["AxAy"] = buffer[10 * stride + delta];
-                        hess_map["AxAz"] = buffer[11 * stride + delta];
-                        hess_map["AxCx"] = buffer[12 * stride + delta];
-                        hess_map["AxCy"] = buffer[13 * stride + delta];
-                        hess_map["AxCz"] = buffer[14 * stride + delta];
-                        hess_map["AxDx"] = buffer[15 * stride + delta];
-                        hess_map["AxDy"] = buffer[16 * stride + delta];
-                        hess_map["AxDz"] = buffer[17 * stride + delta];
-                        hess_map["AyAy"] = buffer[18 * stride + delta];
-                        hess_map["AyAz"] = buffer[19 * stride + delta];
-                        hess_map["AyCx"] = buffer[20 * stride + delta];
-                        hess_map["AyCy"] = buffer[21 * stride + delta];
-                        hess_map["AyCz"] = buffer[22 * stride + delta];
-                        hess_map["AyDx"] = buffer[23 * stride + delta];
-                        hess_map["AyDy"] = buffer[24 * stride + delta];
-                        hess_map["AyDz"] = buffer[25 * stride + delta];
-                        hess_map["AzAz"] = buffer[26 * stride + delta];
-                        hess_map["AzCx"] = buffer[27 * stride + delta];
-                        hess_map["AzCy"] = buffer[28 * stride + delta];
-                        hess_map["AzCz"] = buffer[29 * stride + delta];
-                        hess_map["AzDx"] = buffer[30 * stride + delta];
-                        hess_map["AzDy"] = buffer[31 * stride + delta];
-                        hess_map["AzDz"] = buffer[32 * stride + delta];
-                        hess_map["CxCx"] = buffer[33 * stride + delta];
-                        hess_map["CxCy"] = buffer[34 * stride + delta];
-                        hess_map["CxCz"] = buffer[35 * stride + delta];
-                        hess_map["CxDx"] = buffer[36 * stride + delta];
-                        hess_map["CxDy"] = buffer[37 * stride + delta];
-                        hess_map["CxDz"] = buffer[38 * stride + delta];
-                        hess_map["CyCy"] = buffer[39 * stride + delta];
-                        hess_map["CyCz"] = buffer[40 * stride + delta];
-                        hess_map["CyDx"] = buffer[41 * stride + delta];
-                        hess_map["CyDy"] = buffer[42 * stride + delta];
-                        hess_map["CyDz"] = buffer[43 * stride + delta];
-                        hess_map["CzCz"] = buffer[44 * stride + delta];
-                        hess_map["CzDx"] = buffer[45 * stride + delta];
-                        hess_map["CzDy"] = buffer[46 * stride + delta];
-                        hess_map["CzDz"] = buffer[47 * stride + delta];
-                        hess_map["DxDx"] = buffer[48 * stride + delta];
-                        hess_map["DxDy"] = buffer[49 * stride + delta];
-                        hess_map["DxDz"] = buffer[50 * stride + delta];
-                        hess_map["DyDy"] = buffer[51 * stride + delta];
-                        hess_map["DyDz"] = buffer[52 * stride + delta];
-                        hess_map["DzDz"] = buffer[53 * stride + delta];
-
-                        // Translational invariance relationships
-
-                        hess_map["AxBx"] = -(hess_map["AxAx"] + hess_map["AxCx"] + hess_map["AxDx"]);
-                        hess_map["AxBy"] = -(hess_map["AxAy"] + hess_map["AxCy"] + hess_map["AxDy"]);
-                        hess_map["AxBz"] = -(hess_map["AxAz"] + hess_map["AxCz"] + hess_map["AxDz"]);
-                        hess_map["AyBx"] = -(hess_map["AxAy"] + hess_map["AyCx"] + hess_map["AyDx"]);
-                        hess_map["AyBy"] = -(hess_map["AyAy"] + hess_map["AyCy"] + hess_map["AyDy"]);
-                        hess_map["AyBz"] = -(hess_map["AyAz"] + hess_map["AyCz"] + hess_map["AyDz"]);
-                        hess_map["AzBx"] = -(hess_map["AxAz"] + hess_map["AzCx"] + hess_map["AzDx"]);
-                        hess_map["AzBy"] = -(hess_map["AyAz"] + hess_map["AzCy"] + hess_map["AzDy"]);
-                        hess_map["AzBz"] = -(hess_map["AzAz"] + hess_map["AzCz"] + hess_map["AzDz"]);
-                        hess_map["BxCx"] = -(hess_map["AxCx"] + hess_map["CxCx"] + hess_map["CxDx"]);
-                        hess_map["BxCy"] = -(hess_map["AxCy"] + hess_map["CxCy"] + hess_map["CyDx"]);
-                        hess_map["BxCz"] = -(hess_map["AxCz"] + hess_map["CxCz"] + hess_map["CzDx"]);
-                        hess_map["ByCx"] = -(hess_map["AyCx"] + hess_map["CxCy"] + hess_map["CxDy"]);
-                        hess_map["ByCy"] = -(hess_map["AyCy"] + hess_map["CyCy"] + hess_map["CyDy"]);
-                        hess_map["ByCz"] = -(hess_map["AyCz"] + hess_map["CyCz"] + hess_map["CzDy"]);
-                        hess_map["BzCx"] = -(hess_map["AzCx"] + hess_map["CxCz"] + hess_map["CxDz"]);
-                        hess_map["BzCy"] = -(hess_map["AzCy"] + hess_map["CyCz"] + hess_map["CyDz"]);
-                        hess_map["BzCz"] = -(hess_map["AzCz"] + hess_map["CzCz"] + hess_map["CzDz"]);
-                        hess_map["BxDx"] = -(hess_map["AxDx"] + hess_map["CxDx"] + hess_map["DxDx"]);
-                        hess_map["BxDy"] = -(hess_map["AxDy"] + hess_map["CxDy"] + hess_map["DxDy"]);
-                        hess_map["BxDz"] = -(hess_map["AxDz"] + hess_map["CxDz"] + hess_map["DxDz"]);
-                        hess_map["ByDx"] = -(hess_map["AyDx"] + hess_map["CyDx"] + hess_map["DxDy"]);
-                        hess_map["ByDy"] = -(hess_map["AyDy"] + hess_map["CyDy"] + hess_map["DyDy"]);
-                        hess_map["ByDz"] = -(hess_map["AyDz"] + hess_map["CyDz"] + hess_map["DyDz"]);
-                        hess_map["BzDx"] = -(hess_map["AzDx"] + hess_map["CzDx"] + hess_map["DxDz"]);
-                        hess_map["BzDy"] = -(hess_map["AzDy"] + hess_map["CzDy"] + hess_map["DyDz"]);
-                        hess_map["BzDz"] = -(hess_map["AzDz"] + hess_map["CzDz"] + hess_map["DzDz"]);
-
-                        hess_map["BxBx"] = hess_map["AxAx"] + hess_map["AxCx"] + hess_map["AxDx"] + hess_map["AxCx"] +
-                                           hess_map["CxCx"] + hess_map["CxDx"] + hess_map["AxDx"] + hess_map["CxDx"] +
-                                           hess_map["DxDx"];
-
-                        hess_map["ByBy"] = hess_map["AyAy"] + hess_map["AyCy"] + hess_map["AyDy"] + hess_map["AyCy"] +
-                                           hess_map["CyCy"] + hess_map["CyDy"] + hess_map["AyDy"] + hess_map["CyDy"] +
-                                           hess_map["DyDy"];
-
-                        hess_map["BzBz"] = hess_map["AzAz"] + hess_map["AzCz"] + hess_map["AzDz"] + hess_map["AzCz"] +
-                                           hess_map["CzCz"] + hess_map["CzDz"] + hess_map["AzDz"] + hess_map["CzDz"] +
-                                           hess_map["DzDz"];
-
-                        hess_map["BxBy"] = hess_map["AxAy"] + hess_map["AxCy"] + hess_map["AxDy"] + hess_map["AyCx"] +
-                                           hess_map["CxCy"] + hess_map["CxDy"] + hess_map["AyDx"] + hess_map["CyDx"] +
-                                           hess_map["DxDy"];
-
-                        hess_map["BxBz"] = hess_map["AxAz"] + hess_map["AxCz"] + hess_map["AxDz"] + hess_map["AzCx"] +
-                                           hess_map["CxCz"] + hess_map["CxDz"] + hess_map["AzDx"] + hess_map["CzDx"] +
-                                           hess_map["DxDz"];
-
-                        hess_map["ByBz"] = hess_map["AyAz"] + hess_map["AyCz"] + hess_map["AyDz"] + hess_map["AzCy"] +
-                                           hess_map["CyCz"] + hess_map["CyDz"] + hess_map["AzDy"] + hess_map["CzDy"] +
-                                           hess_map["DyDz"];
+                        hess_map["AxAx"] = buffers[0][delta];
+                        hess_map["AxAy"] = buffers[1][delta];
+                        hess_map["AxAz"] = buffers[2][delta];
+                        hess_map["AxBx"] = buffers[3][delta];
+                        hess_map["AxBy"] = buffers[4][delta];
+                        hess_map["AxBz"] = buffers[5][delta];
+                        hess_map["AxCx"] = buffers[6][delta];
+                        hess_map["AxCy"] = buffers[7][delta];
+                        hess_map["AxCz"] = buffers[8][delta];
+                        hess_map["AxDx"] = buffers[9][delta];
+                        hess_map["AxDy"] = buffers[10][delta];
+                        hess_map["AxDz"] = buffers[11][delta];
+                        hess_map["AyAy"] = buffers[12][delta];
+                        hess_map["AyAz"] = buffers[13][delta];
+                        hess_map["AyBx"] = buffers[14][delta];
+                        hess_map["AyBy"] = buffers[15][delta];
+                        hess_map["AyBz"] = buffers[16][delta];
+                        hess_map["AyCx"] = buffers[17][delta];
+                        hess_map["AyCy"] = buffers[18][delta];
+                        hess_map["AyCz"] = buffers[19][delta];
+                        hess_map["AyDx"] = buffers[20][delta];
+                        hess_map["AyDy"] = buffers[21][delta];
+                        hess_map["AyDz"] = buffers[22][delta];
+                        hess_map["AzAz"] = buffers[23][delta];
+                        hess_map["AzBx"] = buffers[24][delta];
+                        hess_map["AzBy"] = buffers[25][delta];
+                        hess_map["AzBz"] = buffers[26][delta];
+                        hess_map["AzCx"] = buffers[27][delta];
+                        hess_map["AzCy"] = buffers[28][delta];
+                        hess_map["AzCz"] = buffers[29][delta];
+                        hess_map["AzDx"] = buffers[30][delta];
+                        hess_map["AzDy"] = buffers[31][delta];
+                        hess_map["AzDz"] = buffers[32][delta];
+                        hess_map["BxBx"] = buffers[33][delta];
+                        hess_map["BxBy"] = buffers[34][delta];
+                        hess_map["BxBz"] = buffers[35][delta];
+                        hess_map["BxCx"] = buffers[36][delta];
+                        hess_map["BxCy"] = buffers[37][delta];
+                        hess_map["BxCz"] = buffers[38][delta];
+                        hess_map["BxDx"] = buffers[39][delta];
+                        hess_map["BxDy"] = buffers[40][delta];
+                        hess_map["BxDz"] = buffers[41][delta];
+                        hess_map["ByBy"] = buffers[42][delta];
+                        hess_map["ByBz"] = buffers[43][delta];
+                        hess_map["ByCx"] = buffers[44][delta];
+                        hess_map["ByCy"] = buffers[45][delta];
+                        hess_map["ByCz"] = buffers[46][delta];
+                        hess_map["ByDx"] = buffers[47][delta];
+                        hess_map["ByDy"] = buffers[48][delta];
+                        hess_map["ByDz"] = buffers[49][delta];
+                        hess_map["BzBz"] = buffers[50][delta];
+                        hess_map["BzCx"] = buffers[51][delta];
+                        hess_map["BzCy"] = buffers[52][delta];
+                        hess_map["BzCz"] = buffers[53][delta];
+                        hess_map["BzDx"] = buffers[54][delta];
+                        hess_map["BzDy"] = buffers[55][delta];
+                        hess_map["BzDz"] = buffers[56][delta];
+                        hess_map["CxCx"] = buffers[57][delta];
+                        hess_map["CxCy"] = buffers[58][delta];
+                        hess_map["CxCz"] = buffers[59][delta];
+                        hess_map["CxDx"] = buffers[60][delta];
+                        hess_map["CxDy"] = buffers[61][delta];
+                        hess_map["CxDz"] = buffers[62][delta];
+                        hess_map["CyCy"] = buffers[63][delta];
+                        hess_map["CyCz"] = buffers[64][delta];
+                        hess_map["CyDx"] = buffers[65][delta];
+                        hess_map["CyDy"] = buffers[66][delta];
+                        hess_map["CyDz"] = buffers[67][delta];
+                        hess_map["CzCz"] = buffers[68][delta];
+                        hess_map["CzDx"] = buffers[69][delta];
+                        hess_map["CzDy"] = buffers[70][delta];
+                        hess_map["CzDz"] = buffers[71][delta];
+                        hess_map["DxDx"] = buffers[72][delta];
+                        hess_map["DxDy"] = buffers[73][delta];
+                        hess_map["DxDz"] = buffers[74][delta];
+                        hess_map["DyDy"] = buffers[75][delta];
+                        hess_map["DyDz"] = buffers[76][delta];
+                        hess_map["DzDz"] = buffers[77][delta];
 
                         hess_map["AyAx"] = hess_map["AxAy"];
                         hess_map["AzAx"] = hess_map["AxAz"];
                         hess_map["AzAy"] = hess_map["AyAz"];
-
                         hess_map["ByBx"] = hess_map["BxBy"];
                         hess_map["BzBx"] = hess_map["BxBz"];
                         hess_map["BzBy"] = hess_map["ByBz"];
-
                         hess_map["CyCx"] = hess_map["CxCy"];
                         hess_map["CzCx"] = hess_map["CxCz"];
                         hess_map["CzCy"] = hess_map["CyCz"];
-
                         hess_map["DyDx"] = hess_map["DxDy"];
                         hess_map["DzDx"] = hess_map["DxDz"];
                         hess_map["DzDy"] = hess_map["DyDz"];
