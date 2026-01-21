@@ -67,6 +67,12 @@ class PSI_API FittingMetric {
     /// Is the metric inverted or just a J matrix?
     bool is_inverted_;
 
+    /// Is the metric using DPC + Tikhonov regularization technique
+    bool DPC_;
+
+    /// Reference wavefunction used for DPC RHS
+    SharedWavefunction reference_wavefunction_; 
+
     /// Fully pivot the fitting metric
     void pivot();
 
@@ -108,6 +114,11 @@ class PSI_API FittingMetric {
     void form_QR_inverse(double tol = 1.0E-10);
     /// Build the eigendecomposed half inverse metric (calls form_fitting_metric)
     void form_eig_inverse(double tol = 1.0E-10);
+    /// Build the eigendecomposed half inverse metric using DPC with Tikhonov (calls form_fitting_metric) 
+    void form_eig_inverse_DPC();
+    void set_reference_wfn(SharedWavefunction ref_wfn) {
+    reference_wavefunction_ = ref_wfn;
+    }
     /// Build the full inverse metric. NOT RECOMMENDED: Numerical stability (calls form_fitting_metric)
     void form_full_inverse();
     /// Build the full inverse metric.

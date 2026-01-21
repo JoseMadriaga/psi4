@@ -186,6 +186,7 @@ void DFMP2::common_init() {
 }
 double DFMP2::compute_energy() {
     print_header();
+    outfile->Printf(" Hello darkness my old friend ");
     auto num_alpha_excit = std::min(Ca_subset("AO", "ACTIVE_OCC")->colspi()[0], Ca_subset("AO", "ACTIVE_VIR")->colspi()[0]);
     auto num_beta_excit = std::min(Cb_subset("AO", "ACTIVE_OCC")->colspi()[0], Cb_subset("AO", "ACTIVE_VIR")->colspi()[0]);
     if (num_alpha_excit + num_beta_excit < 2) {
@@ -410,8 +411,11 @@ SharedMatrix DFMP2::form_inverse_metric() {
     } else {
         // Form the inverse metric manually
         auto metric = std::make_shared<FittingMetric>(ribasis_, true);
-        metric->form_eig_inverse(options_.get_double("DF_FITTING_CONDITION"));
-        auto Jm12 = metric->get_metric();
+        //commenting out for now to use form_eig_inverse_DPC();
+	//metric->form_eig_inverse(options_.get_double("DF_FITTING_CONDITION"));
+	metric->set_reference_wfn(reference_wavefunction_);
+        metric->form_eig_inverse_DPC();
+	auto Jm12 = metric->get_metric();
 
         // Save inverse metric to the SCF three-index integral file if it exists
         if (options_.get_str("DF_INTS_IO") == "SAVE") {
