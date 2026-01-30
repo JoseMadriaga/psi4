@@ -206,6 +206,7 @@ double DFMP2::compute_energy() {
     form_Aia();
     timer_off("DFMP2 Aia");
     timer_on("DFMP2 Bia");
+    std::cout << "going into form_Bia" << std::endl;
     form_Bia();
     timer_off("DFMP2 Bia");
     timer_on("DFMP2 Energy");
@@ -391,9 +392,9 @@ void DFMP2::form_singles() {
         outfile->Printf("  Beta  singles energy = %24.16E\n\n", E_singles_b);
     }
 }
-SharedMatrix DFMP2::form_inverse_metric() {
+SharedMatrix DFMP2::form_inverse_metric() {	
     timer_on("DFMP2 Metric");
-
+    std::cout << "just touched form_inverse_metric()" << std::endl;
     int naux = ribasis_->nbf();
 
     // Load inverse metric from the SCF three-index integral file if it exists
@@ -410,10 +411,12 @@ SharedMatrix DFMP2::form_inverse_metric() {
 
     } else {
         // Form the inverse metric manually
+	std::cout << "grabbing FittingMetric object" << std::endl;
         auto metric = std::make_shared<FittingMetric>(ribasis_, true);
         //commenting out for now to use form_eig_inverse_DPC();
 	//metric->form_eig_inverse(options_.get_double("DF_FITTING_CONDITION"));
 	metric->set_reference_wfn(reference_wavefunction_);
+	std::cout << "prior to form_eig_inverse_DPC()" << std::endl;
         metric->form_eig_inverse_DPC();
 	auto Jm12 = metric->get_metric();
 
@@ -976,6 +979,7 @@ void RDFMP2::form_Aia() {
     psio_->close(PSIF_DFMP2_AIA, 1);
 }
 void RDFMP2::form_Bia() {
+    std::cout << "going into form_inverse_metric()" << std::endl;	
     SharedMatrix Jm12 = form_inverse_metric();
     apply_fitting(Jm12, PSIF_DFMP2_AIA, ribasis_->nbf(), Caocc_->colspi()[0] * (size_t)Cavir_->colspi()[0]);
 }
