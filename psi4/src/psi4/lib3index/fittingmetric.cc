@@ -238,7 +238,7 @@ void FittingMetric::form_fitting_metric() {
     // If C1, form indexing and exit immediately (multiplying by 1 is not so gratifying)
     if (auxpet->nirrep() == 1 || force_C1_ == true) {
         metric_ = AOmetric;
-        if (DPC_) {
+        if (DPC_ or TR_) {
             const double regularizer = 1e-10;
             outfile->Printf("Adding in the regularizer: %.8e\n", regularizer);
             for (int i = 0; i < naux; ++i) {
@@ -585,8 +585,7 @@ void FittingMetric::form_eig_inverse_DPC() {
     //            }
     //        }
     //    }
-    //}
-    
+    //} 
     std::cout << "prior to T_flat" << std::endl;
     // --- Flatten metric into contiguous vector for diagonalization ---
     std::vector<double> metric_flat(naux * naux, 0.0);
@@ -877,6 +876,208 @@ void FittingMetric::form_eig_inverse_DPC() {
     //std::cout << "norm " << norm << std::endl;
     //metric_->set_name("SO Basis Fitting Inverse (DPC)");
 }
+void FittingMetric::form_eig_inverse_TR() {
+    is_inverted_ = true;
+    algorithm_ = "TR"; 
+    TR_ = true;
+
+    form_fitting_metric();
+
+    auto zero = BasisSet::zero_ao_basis_set();
+    auto basis = reference_wavefunction_->basisset();
+    auto eri_fact = std::make_shared<IntegralFactory>(aux_, zero, basis, basis);
+    auto eri = std::shared_ptr<TwoBodyAOInt>(eri_fact->eri());
+
+    SharedMatrix D_ao = reference_wavefunction_->Da();
+    if (!D_ao) {
+        throw std::runtime_error("D_ao is null");
+    }
+
+    int naux = aux_->nbf();
+    int nbf  = basis->nbf();
+
+    if (D_ao->nrow() != nbf || D_ao->ncol() != nbf) {
+        throw std::runtime_error("D_ao dimension mismatch");
+    }
+
+    std::vector<double> rhs(naux, 0.0);
+
+    // zero basis info
+    int n0 = zero->shell(0).nfunction();
+    if (n0 <= 0) {
+        throw std::runtime_error("Zero basis has invalid nfunction");
+    }
+
+    for (int P = 0; P < aux_->nshell(); P++) {
+
+        const auto& Pshell = aux_->shell(P);
+        int np = Pshell.nfunction();
+        int pstart = Pshell.function_index();
+
+        if (pstart < 0 || pstart + np > naux) {
+            throw std::runtime_error("Aux shell index out of bounds");
+        }
+
+        for (int M = 0; M < basis->nshell(); M++) {
+
+            const auto& Mshell = basis->shell(M);
+            int nm = Mshell.nfunction();
+            int mstart = Mshell.function_index();
+
+            if (mstart < 0 || mstart + nm > nbf) {
+                throw std::runtime_error("Basis shell M index out of bounds");
+	    }
+
+            for (int N = 0; N < basis->nshell(); N++) {
+
+                const auto& Nshell = basis->shell(N);
+                int nn = Nshell.nfunction();
+                int nstart = Nshell.function_index();
+
+                if (nstart < 0 || nstart + nn > nbf) {
+                    throw std::runtime_error("Basis shell N index out of bounds");
+                }
+
+                // Compute (P | 0 M N)
+                eri->compute_shell(P, 0, M, N);
+                const double* buffer = eri->buffer();
+
+                if (!buffer) {
+                    throw std::runtime_error("ERI buffer is null");
+                }
+
+                int expected_size = np * n0 * nm * nn;
+                int index = 0;
+
+                for (int p = 0; p < np; p++) {
+                    for (int q = 0; q < n0; q++) {
+                        for (int m = 0; m < nm; m++) {
+                            for (int n = 0; n < nn; n++) {
+
+                                int Pidx = p + pstart;
+                                int midx = m + mstart;
+                                int nidx = n + nstart;
+
+                                rhs[Pidx] += buffer[index]
+                                             * (*D_ao)(midx, nidx);
+                                index++;
+                            }
+                        }
+                    }
+                }
+
+                if (index != expected_size) {
+                    throw std::runtime_error("ERI buffer index mismatch");
+                }
+            }
+        }
+    }
+
+    // --- Flatten metric into contiguous vector for diagonalization ---
+    std::vector<double> metric_flat(naux * naux, 0.0);
+    for (int i = 0; i < naux; i++)
+        for (int j = 0; j < naux; j++)
+            metric_flat[i * naux + j] = (*metric_)(i,j);
+
+    // --- Diagonalize metric (C_DSYEV requires contiguous memory) ---
+    std::vector<double> eigval(naux, 0.0);
+    int lwork = naux * 3;
+    std::vector<double> work(lwork, 0.0);
+
+    int stat = C_DSYEV('v', 'u', naux, metric_flat.data(), naux, eigval.data(), work.data(), lwork);
+    if (stat != 0)
+        throw std::runtime_error("C_DSYEV failed to diagonalize metric");
+
+    work.clear();  // free workspace
+
+    // --- Compute Picard coefficients ---
+    std::vector<double> sigma(naux, 0.0);
+    std::vector<double> picard(naux, 0.0);
+    for (int i = 0; i < naux; i++) {
+        sigma[i] = std::sqrt(std::abs(eigval[i]));
+
+        double dotprod = 0.0;
+        for (int P = 0; P < naux; P++)
+            dotprod += metric_flat[P + i * naux] * rhs[P];  // use flat eigenvectors
+
+        picard[i] = std::abs(dotprod) / sigma[i];
+    }
+
+    rhs.clear();  // free memory
+
+    // --- Find knee of Picard coefficients ---
+    double epsilon_opt = 0.0;
+    for (int i = 0; i < naux - 1; i++) {
+        if (picard[i+1] > picard[i]) {
+            epsilon_opt = sigma[i];
+            break;
+        }
+    }
+    double tol = epsilon_opt * epsilon_opt;
+
+    picard.clear();
+
+    std::vector<double> d(naux, 0.0);
+    for (int i = 0; i < naux; i++) {
+        const double s = sigma[i];
+        if (s > 0.0) {
+            const double s2 = s * s;
+            const double f  = s2 / (s2 + tol);
+            d[i] = f / s;
+        } else {
+            d[i] = 0.0;
+        }
+    }
+
+    sigma.clear();  // free memory
+
+    double d_norm = 0.0;
+    for (int i = 0; i < naux; i++) {
+        d_norm += d[i] * d[i];
+    }
+    d_norm = std::sqrt(d_norm);
+    std::cout << "\n d_norm" << std::endl; 
+    std::cout << d_norm << std::endl; 
+
+
+    std::cout << "\n metric:" << std::endl;
+    metric_->zero();
+    // --- Reconstruct inverse metric ---
+    for (int i = 0; i < naux; i++) {
+	const double di = d[i];
+        for (int r = 0; r < naux; r++) {
+            const double U_r_i = metric_flat[r + i * naux];
+            const double scaled = U_r_i * di;
+            for (int c = 0; c < naux; c++) {
+                (*metric_)(r,c) += scaled * metric_flat[c + i * naux];
+            }
+        }
+    }
+
+    double norm = 0.0;
+    for (int i = 0; i < naux; i++)
+        for (int j = 0; j < naux; j++)
+            norm += (*metric_)(i,j) * (*metric_)(i,j);
+    norm = std::sqrt(norm);
+    std::cout << norm << std::endl;
+
+    //for (int i = 0; i < naux; i++) {
+    //    if (eigval[i] > tol) {
+    //        double inv_sqrt = 1.0 / std::sqrt(eigval[i]);
+    //        for (int r = 0; r < naux; r++) {
+    //            for (int c = 0; c < naux; c++) {
+    //                (*metric_)(r,c) += metric_flat[r + i*naux] * inv_sqrt * metric_flat[c + i*naux];
+    //            }
+    //        }
+    //    }
+    //}
+    
+    metric_flat.clear();
+    eigval.clear();
+
+    metric_->set_name("SO Basis Fitting Inverse (TR)");
+
+}	
 void FittingMetric::form_full_eig_inverse(double tol) {
     is_inverted_ = true;
     algorithm_ = "EIG";
