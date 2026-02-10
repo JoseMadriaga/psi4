@@ -45,6 +45,9 @@
 #include "psi4/libmints/integral.h"
 #include "psi4/libmints/matrix.h"
 #include "psi4/libmints/vector.h"
+#include "psi4/libfock/jk.h"
+#include "psi4/libmints/wavefunction.h"
+#include <iostream>
 
 // MKL Header
 #ifdef USING_LAPACK_MKL
@@ -235,6 +238,13 @@ void FittingMetric::form_fitting_metric() {
     // If C1, form indexing and exit immediately (multiplying by 1 is not so gratifying)
     if (auxpet->nirrep() == 1 || force_C1_ == true) {
         metric_ = AOmetric;
+        if (DPC_) {
+            const double regularizer = 1e-10;
+            outfile->Printf("Adding in the regularizer: %.8e\n", regularizer);
+            for (int i = 0; i < naux; ++i) {
+                metric_->add(i, i, regularizer);
+            }
+        } 
         metric_->set_name("SO Basis Fitting Metric");
         pivots_ = std::make_shared<IntVector>(naux);
         rev_pivots_ = std::make_shared<IntVector>(naux);
@@ -428,6 +438,444 @@ void FittingMetric::form_eig_inverse(double tol) {
     form_fitting_metric();
     metric_->power(-0.5, tol);
     metric_->set_name("SO Basis Fitting Inverse (Eig)");
+}
+void FittingMetric::form_eig_inverse_DPC() {
+    // --- Setup DPC ---
+    is_inverted_ = true;
+    algorithm_ = "DPC";
+    DPC_ = true;
+    
+    std::cout << "prior to form_fitting_metric()" << std::endl;
+    form_fitting_metric();
+    
+    std::cout << "prior to allocating zero, basis, D_ao, naux, nbf" << std::endl;
+    auto zero = BasisSet::zero_ao_basis_set();
+    auto basis = reference_wavefunction_->basisset();
+    //auto D_ao = reference_wavefunction_->Da();
+    //int naux = aux_->nbf();
+    //int nbf  = basis->nbf();
+
+    auto eri_fact = std::make_shared<IntegralFactory>(aux_, zero, basis, basis);
+    auto eri = std::shared_ptr<TwoBodyAOInt>(eri_fact->eri());
+
+    std::cout << "prior to generate RHS" << std::endl;
+    
+    SharedMatrix D_ao = reference_wavefunction_->Da();
+    if (!D_ao) {
+        throw std::runtime_error("D_ao is null");
+    }
+    
+    int naux = aux_->nbf();
+    int nbf  = basis->nbf();
+    
+    if (D_ao->nrow() != nbf || D_ao->ncol() != nbf) {
+        throw std::runtime_error("D_ao dimension mismatch");
+    }
+    
+    std::vector<double> rhs(naux, 0.0);
+    
+    // zero basis info
+    int n0 = zero->shell(0).nfunction();
+    std::cout << "zero basis nfunction = " << n0 << std::endl;
+    if (n0 <= 0) {
+        throw std::runtime_error("Zero basis has invalid nfunction");
+    }
+    
+    for (int P = 0; P < aux_->nshell(); P++) {
+    
+        const auto& Pshell = aux_->shell(P);
+        int np = Pshell.nfunction();
+        int pstart = Pshell.function_index();
+    
+        if (pstart < 0 || pstart + np > naux) {
+            throw std::runtime_error("Aux shell index out of bounds");
+        }
+    
+        std::cout << "P shell " << P
+                  << " np=" << np
+                  << " pstart=" << pstart << std::endl;
+    
+        for (int M = 0; M < basis->nshell(); M++) {
+    
+            const auto& Mshell = basis->shell(M);
+            int nm = Mshell.nfunction();
+            int mstart = Mshell.function_index();
+    
+            if (mstart < 0 || mstart + nm > nbf) {
+                throw std::runtime_error("Basis shell M index out of bounds");
+            }
+    
+            for (int N = 0; N < basis->nshell(); N++) {
+    
+                const auto& Nshell = basis->shell(N);
+                int nn = Nshell.nfunction();
+                int nstart = Nshell.function_index();
+    
+                if (nstart < 0 || nstart + nn > nbf) {
+                    throw std::runtime_error("Basis shell N index out of bounds");
+                }
+    
+                // Compute (P | 0 M N)
+                eri->compute_shell(P, 0, M, N);
+                const double* buffer = eri->buffer();
+    
+                if (!buffer) {
+                    throw std::runtime_error("ERI buffer is null");
+                }
+    
+                int expected_size = np * n0 * nm * nn;
+                int index = 0;
+    
+                for (int p = 0; p < np; p++) {
+                    for (int q = 0; q < n0; q++) {
+                        for (int m = 0; m < nm; m++) {
+                            for (int n = 0; n < nn; n++) {
+    
+                                int Pidx = p + pstart;
+                                int midx = m + mstart;
+                                int nidx = n + nstart;
+    
+                                rhs[Pidx] += buffer[index]
+                                             * (*D_ao)(midx, nidx);
+                                index++;
+                            }
+                        }
+                    }
+                }
+    
+                if (index != expected_size) {
+                    throw std::runtime_error("ERI buffer index mismatch");
+                }
+            }
+        }
+    }
+    
+    std::cout << "RHS generation completed successfully" << std::endl;
+
+
+    //std::cout << "prior to generate three-centered and two body integrals" << std::endl;
+    //// --- Compute RHS on-the-fly (memory efficient) ---
+    //std::vector<double> rhs(naux, 0.0);
+    //auto eri_fact = std::make_shared<IntegralFactory>(aux_, zero, basis, basis);
+    //auto eri = std::shared_ptr<TwoBodyAOInt>(eri_fact->eri());
+    //
+    //std::cout << "prior to generate RHS" << std::endl;
+    //for (int P = 0; P < aux_->nshell(); P++) {
+    //    int np = aux_->shell(P).nfunction();
+    //    int pstart = aux_->shell(P).function_index();
+    //
+    //    for (int M = 0; M < basis->nshell(); M++) {
+    //        int nm = basis->shell(M).nfunction();
+    //        int mstart = basis->shell(M).function_index();
+    //
+    //        for (int N = 0; N < basis->nshell(); N++) {
+    //            int nn = basis->shell(N).nfunction();
+    //            int nstart = basis->shell(N).function_index();
+    //
+    //            eri->compute_shell(P, 0, M, N);
+    //            const double* buffer = eri->buffer();
+    //
+    //            // accumulate directly into rhs
+    //            for (int p = 0, index = 0; p < np; p++) {
+    //                for (int m = 0; m < nm; m++) {
+    //                    for (int n = 0; n < nn; n++, index++) {
+    //                        rhs[p + pstart] += buffer[index] * (*D_ao)(m + mstart, n + nstart);
+    //                    }
+    //                }
+    //            }
+    //        }
+    //    }
+    //}
+    
+    std::cout << "prior to T_flat" << std::endl;
+    // --- Flatten metric into contiguous vector for diagonalization ---
+    std::vector<double> metric_flat(naux * naux, 0.0);
+    for (int i = 0; i < naux; i++)
+        for (int j = 0; j < naux; j++)
+            metric_flat[i * naux + j] = (*metric_)(i,j);
+    
+    std::cout << "prior to diagonalize" << std::endl;
+    // --- Diagonalize metric (C_DSYEV requires contiguous memory) ---
+    std::vector<double> eigval(naux, 0.0);
+    int lwork = naux * 3;
+    std::vector<double> work(lwork, 0.0);
+    
+    int stat = C_DSYEV('v', 'u', naux, metric_flat.data(), naux, eigval.data(), work.data(), lwork);
+    if (stat != 0)
+        throw std::runtime_error("C_DSYEV failed to diagonalize metric");
+    
+    work.clear();  // free workspace
+    
+    std::cout << "prior to picard_coef" << std::endl;
+    // --- Compute Picard coefficients ---
+    std::vector<double> sigma(naux, 0.0);
+    std::vector<double> picard(naux, 0.0);
+    for (int i = 0; i < naux; i++) {
+        sigma[i] = std::sqrt(std::abs(eigval[i]));
+    
+        double dotprod = 0.0;
+        for (int P = 0; P < naux; P++)
+            dotprod += metric_flat[P + i * naux] * rhs[P];  // use flat eigenvectors
+    
+        picard[i] = std::abs(dotprod) / sigma[i];
+    }
+    
+    rhs.clear();  // free memory
+    
+    std::cout << "prior to determining eps_opt" << std::endl;
+    // --- Find knee of Picard coefficients ---
+    double epsilon_opt = 0.0;
+    for (int i = 0; i < naux - 1; i++) {
+        if (picard[i+1] > picard[i]) {
+            epsilon_opt = sigma[i];
+            break;
+        }
+    }
+    double tol = epsilon_opt * epsilon_opt;
+    std::cout << "tol " << tol << std::endl;
+    
+    picard.clear();
+    sigma.clear();  // free memory
+    
+    std::cout << "prior to inverse metric" << std::endl;
+    // --- Reconstruct inverse metric ---
+    for (int r = 0; r < naux; r++)
+        for (int c = 0; c < naux; c++)
+            (*metric_)(r,c) = 0.0;
+    
+    for (int i = 0; i < naux; i++) {
+        if (eigval[i] > tol) {
+            double inv_sqrt = 1.0 / std::sqrt(eigval[i]);
+            for (int r = 0; r < naux; r++) {
+                for (int c = 0; c < naux; c++) {
+                    (*metric_)(r,c) += metric_flat[r + i*naux] * inv_sqrt * metric_flat[c + i*naux];
+                }
+            }
+        }
+    }
+    
+    metric_flat.clear();
+    eigval.clear();
+    
+    metric_->set_name("SO Basis Fitting Inverse (DPC)");
+
+    //is_inverted_ = true;
+    //algorithm_ = "DPC";
+    //DPC_ = true;
+
+    //form_fitting_metric();
+
+    //std::shared_ptr<BasisSet> zero = BasisSet::zero_ao_basis_set();
+    //std::shared_ptr<BasisSet> basis_ = reference_wavefunction_->basisset();
+
+    //// This is already squeezed
+    //auto eri3c = std::make_shared<IntegralFactory>(aux_, zero, basis_, basis_); //(aux_, zero, aux_, aux_);
+    //SharedMatrix D_ao = reference_wavefunction_->Da();
+    ////double norm2 = 0.0;
+    ////for (int h = 0; h < D_ao->nirrep(); ++h) {
+    ////    int rows = D_ao->rowdim(h);
+    ////    int cols = D_ao->coldim(h);
+    ////    double** Dh = D_ao->pointer(h);
+    ////
+    ////    for (int i = 0; i < rows; ++i)
+    ////        for (int j = 0; j < cols; ++j)
+    ////            norm2 += Dh[i][j] * Dh[i][j];
+    ////}
+    ////double norm_D = std::sqrt(norm2);
+    ////std::cout << norm_D << std::endl;
+
+    ////outfile->Printf("||D_ao||_F = %.12e\n", norm_D);
+    ////SharedMatrix rhs = mult(D_ao, eri3c, true, false, 1.0, 0.0);
+    //int naux = aux_->nbf();       // number of auxiliary functions
+    //int nbf  = basis_->nbf();     // number of primary basis functions
+
+    //// Create Bp matrix: naux x (nbf*nbf)
+    //std::vector<std::vector<double>> Bp(naux, std::vector<double>(nbf * nbf, 0.0));
+    //
+    //// Build the integral engine
+    //auto fact = std::make_shared<IntegralFactory>(aux_, BasisSet::zero_ao_basis_set(), basis_, basis_);
+    //std::shared_ptr<TwoBodyAOInt> eri(fact->eri());
+    //
+    //// Loop over shells to fill Bp
+    //for (int P = 0; P < aux_->nshell(); P++) {
+    //    int np = aux_->shell(P).nfunction();
+    //    int pstart = aux_->shell(P).function_index();
+    //
+    //    for (int M = 0; M < basis_->nshell(); M++) {
+    //        int nm = basis_->shell(M).nfunction();
+    //        int mstart = basis_->shell(M).function_index();
+    //
+    //        for (int N = 0; N < basis_->nshell(); N++) {
+    //            int nn = basis_->shell(N).nfunction();
+    //            int nstart = basis_->shell(N).function_index();
+    //
+    //            // Compute shell (P,M,N) integrals
+    //            eri->compute_shell(P, 0, M, N);
+    //            const double* buffer = eri->buffer();
+    //
+    //            // Map shell-local integrals to global AO indices
+    //            for (int p = 0, index = 0; p < np; p++) {
+    //                for (int m = 0; m < nm; m++) {
+    //                    for (int n = 0; n < nn; n++, index++) {
+    //                        Bp[p + pstart][(m + mstart) * nbf + (n + nstart)] = buffer[index];
+    //                    }
+    //                }
+    //            }
+    //        }
+    //    }
+    //}
+    //
+    //// Contract Bp with D_ao to get rhs: rhs_P = sum_uv (P|uv) D_uv
+    //std::vector<double> rhs(naux, 0.0);
+    //
+    //for (int P = 0; P < naux; P++) {
+    //    for (int u = 0; u < nbf; u++) {
+    //        for (int v = 0; v < nbf; v++) {
+    //            rhs[P] += Bp[P][u * nbf + v] * (*D_ao)(u, v);
+    //        }
+    //    }
+    //}
+    ////double frobenius_rhs = 0.0;
+    ////for (int P = 0; P < naux; P++) {
+    ////    frobenius_rhs += rhs[P] * rhs[P];
+    ////}
+    ////frobenius_rhs = std::sqrt(frobenius_rhs);
+    ////
+    ////std::cout << "Frobenius norm of rhs: " << frobenius_rhs << std::endl;
+    ////// eri3c holds the 3-center integrals (P|uv)
+    ////for (int P = 0; P < naux; ++P) {
+    ////    double sum = 0.0;
+    ////    for (int u = 0; u < nbf; ++u) {
+    ////        for (int v = 0; v < nbf; ++v) {
+    ////            // eri3c->get(P,u,v) returns (P|uv)
+    ////            sum += eri3c->get(P, u, v) * (*D_ao)(u,v);
+    ////        }
+    ////    }
+    ////    (*rhs)(P,0) = sum;
+    ////}
+
+    //// Compute eigenvalues and eigenvectors of the metric
+    ////std::vector<double> eigvals = metric_->eigenvalues();
+    ////Matrix eigvecs = metric_->eigenvectors();
+    //
+    //// Allocate sigma and Picard coefficient containers
+    ////std::vector<double> sigma(eigvals.size());
+    ////std::vector<double> picard_coeffs(eigvals.size());
+    ////double epsilon_opt = 0.0;
+    //
+    ////// Loop over eigenvalues
+    ////for (size_t i = 0; i < eigvals.size(); ++i) {
+    ////    sigma[i] = std::sqrt(std::abs(eigvals[i]));
+    ////
+    ////    // rhs here is (D_ao * (P|uv)), flatten column access if needed
+    ////    picard_coeffs[i] = std::abs(dot(eigvecs.column(i), rhs->column(i))) / sigma[i];
+    ////}
+    ////
+    ////// Find the Picard "knee" to select optimal regularization
+    ////for (size_t i = 0; i < sigma.size() - 1; ++i) {
+    ////    if (picard_coeffs[i+1] > picard_coeffs[i]) {
+    ////        epsilon_opt = sigma[i];
+    ////        break;
+    ////    }
+    ////}
+    ////
+    ////// Convert to tolerance and regularize the metric
+    ////double tol = epsilon_opt * epsilon_opt;
+    ////metric_->power(-0.5, tol);
+    ////metric_->set_name("SO Basis Fitting Inverse (DPC)");
+    //// Step 5: Diagonalize the metric using C_DSYEV (symmetric eigenproblem)
+    //// Flatten metric_ matrix into column-major array T
+    //std::vector<double> T_flat(naux * naux, 0.0);
+    //for (int i = 0; i < naux; i++)
+    //    for (int j = 0; j < naux; j++)
+    //        T_flat[i * naux + j] = (*metric_)(i, j);
+
+    //std::vector<double> eigval(naux, 0.0);
+    //int lwork = naux * 3;
+    //std::vector<double> work(lwork, 0.0);
+
+    //int stat = C_DSYEV('v', 'u', naux, T_flat.data(), naux, eigval.data(), work.data(), lwork);
+    //if (stat != 0) {
+    //    throw std::runtime_error("C_DSYEV failed to diagonalize metric");
+    //}
+
+    //// Step 6: Compute Picard coefficients and find optimal tolerance
+    //std::vector<double> sigma(naux, 0.0);
+    //std::vector<double> picard_coeffs(naux, 0.0);
+    //double epsilon_opt = 0.0;
+
+    //// Compute L2 norm of eigenvalues
+    ////double eigval_norm = 0.0;
+    ////for (int i = 0; i < naux; i++) {
+    ////    eigval_norm += eigval[i] * eigval[i];
+    ////}
+    ////eigval_norm = std::sqrt(eigval_norm);
+
+    ////// Compute Frobenius norm of eigenvectors
+    ////double eigvec_norm = 0.0;
+    ////for (int i = 0; i < naux * naux; i++) {
+    ////    eigvec_norm += T_flat[i] * T_flat[i];
+    ////}
+    ////eigvec_norm = std::sqrt(eigvec_norm);
+    ////std::cout << "Eigenvalue L2 norm: " << eigval_norm << "\n";
+    ////std::cout << "Eigenvector Frobenius norm: " << eigvec_norm << "\n";
+
+    //for (int i = 0; i < naux; i++) {
+    //    sigma[i] = std::sqrt(std::abs(eigval[i]));
+
+    //    // Dot product of i-th eigenvector with rhs
+    //    double dotprod = 0.0;
+    //    for (int P = 0; P < naux; P++)
+    //        //dotprod += T_flat[P * naux + i] * rhs[P];
+    //        dotprod += T_flat[P + i*naux] * rhs[P];
+    //    picard_coeffs[i] = std::abs(dotprod) / sigma[i];
+    //}
+
+    ////double pc_norm = 0.0;
+    ////for (int i = 0; i < naux; i++) {
+    ////    pc_norm += picard_coeffs[i] * picard_coeffs[i];
+    ////}
+    ////pc_norm = std::sqrt(pc_norm);
+    ////std::cout << "picard coeffs" << pc_norm << "\n";
+    ////std::cout << "Picard coefficients: ";
+    ////for (size_t i = 0; i < picard_coeffs.size(); ++i) {
+    ////    std::cout << picard_coeffs[i] << " ";
+    ////}
+    //std::cout << "\n";
+    //// Find the "knee" of Picard coefficients
+    //for (int i = 0; i < naux - 1; i++) {
+    //    if (picard_coeffs[i + 1] > picard_coeffs[i]) {
+    //        epsilon_opt = sigma[i];
+    //        break;
+    //    }
+    //}
+
+    //double tol = epsilon_opt * epsilon_opt;
+    //std::cout << "tol " << tol << std::endl;
+    ////metric_->power(-0.5, tol);
+    //// Allocate metric_inv_sqrt
+    //// 6. Overwrite metric_ in place with metric_inv_sqrt = U * diag(inv_sqrt(eigvals[mask])) * U^T
+    //for (int r = 0; r < naux; r++)
+    //    for (int c = 0; c < naux; c++)
+    //        (*metric_)(r, c) = 0.0;  // reset
+    //
+    //for (int i = 0; i < naux; i++) {
+    //    if (eigval[i] > tol) {  // mask
+    //        double inv_sqrt = 1.0 / std::sqrt(eigval[i]);
+    //        for (int r = 0; r < naux; r++) {
+    //            for (int c = 0; c < naux; c++) {
+    //                (*metric_)(r, c) += T_flat[r + i * naux] * inv_sqrt * T_flat[c + i * naux];
+    //            }
+    //        }
+    //    }
+    //}
+    //double norm = 0.0;
+    //for (int i = 0; i < naux; i++)
+    //    for (int j = 0; j < naux; j++)
+    //        norm += (*metric_)(i,j) * (*metric_)(i,j);
+    //norm = std::sqrt(norm);
+    //std::cout << "norm " << norm << std::endl;
+    //metric_->set_name("SO Basis Fitting Inverse (DPC)");
 }
 void FittingMetric::form_full_eig_inverse(double tol) {
     is_inverted_ = true;
