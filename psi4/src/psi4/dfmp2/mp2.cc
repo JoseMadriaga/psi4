@@ -417,7 +417,15 @@ SharedMatrix DFMP2::form_inverse_metric() {
 	//metric->form_eig_inverse(options_.get_double("DF_FITTING_CONDITION"));
 	metric->set_reference_wfn(reference_wavefunction_);
 	std::cout << "prior to form_eig_inverse_DPC()" << std::endl;
-        metric->form_eig_inverse_DPC();
+	if (options_.get_str("mp2_type") == "DPC") { 
+            metric->form_eig_inverse_DPC();
+	}
+	//else if (options_.get_str("mp2_type") == "DPC_filter") {
+        //    metric->form_eig_inverse_filter();
+        //}
+        else {
+	    metric->form_eig_inverse();
+        }	    
 	auto Jm12 = metric->get_metric();
 
         // Save inverse metric to the SCF three-index integral file if it exists

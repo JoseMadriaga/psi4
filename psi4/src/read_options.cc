@@ -3385,7 +3385,7 @@ int read_options(const std::string &name, Options &options, bool suppress_printi
 
         /*- SUBSECTION General Options -*/
         /*- Algorithm to use for MP2-F12 computation, conventional or density-fitted. -*/
-        options.add_str("MP2_TYPE", "DF", "DF CONV");
+        options.add_str("MP2_TYPE", "DF", "DF CONV DPC DPC_filter");
         /*- For certain |globals__mp2_type| algorithms that have internal sub-algorithms
             depending on available memory or other hardware constraints, select a sub-algorithm
             Presently, ``MP2_TYPE=DF`` and ``MP2_TYPE=CONV``
