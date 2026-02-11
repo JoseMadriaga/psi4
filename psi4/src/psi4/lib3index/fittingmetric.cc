@@ -436,6 +436,26 @@ void FittingMetric::form_eig_inverse(double tol) {
     algorithm_ = "EIG";
 
     form_fitting_metric();
+
+    int naux = aux_->nbf(); 
+    // Diagonalize metric BEFORE calling power()
+    auto eigvecs = metric_->clone();
+    auto eigvals = std::make_shared<Vector>("eigvals", naux);
+    
+    metric_->diagonalize(eigvecs, eigvals);
+    // Count how many eigenvalues survive the tolerance
+    int nkept = 0;
+    for (int i = 0; i < naux; ++i) {
+        if (eigvals->get(i) > tol) {
+            ++nkept;
+        }
+    }
+    
+    double trunc_ratio = static_cast<double>(nkept) / static_cast<double>(naux);
+    
+    outfile->Printf("Metric power(-1/2) truncation: kept %d / %d (ratio = %.6f)\n",
+                    nkept, naux, trunc_ratio);
+    
     metric_->power(-0.5, tol);
     metric_->set_name("SO Basis Fitting Inverse (Eig)");
 }
@@ -445,7 +465,7 @@ void FittingMetric::form_eig_inverse_DPC() {
     algorithm_ = "DPC";
     DPC_ = true;
     
-    std::cout << "prior to form_fitting_metric()" << std::endl;
+    outfile->Printf("DPC-weighted cutoff with TR stability \n");
     form_fitting_metric();
     
     std::cout << "prior to allocating zero, basis, D_ao, naux, nbf" << std::endl;
@@ -641,7 +661,15 @@ void FittingMetric::form_eig_inverse_DPC() {
     for (int r = 0; r < naux; r++)
         for (int c = 0; c < naux; c++)
             (*metric_)(r,c) = 0.0;
-    
+
+    // count kept modes (truncated dimension)
+    int nkept = 0;
+    for (int i = 0; i < naux; ++i) {
+        if (eigval[i] != 0.0) ++nkept;           // or std::abs(d[i]) > 0.0
+    }
+
+    const double trunc_ratio = static_cast<double>(nkept) / static_cast<double>(naux);
+
     for (int i = 0; i < naux; i++) {
         if (eigval[i] > tol) {
             double inv_sqrt = 1.0 / std::sqrt(eigval[i]);
@@ -652,7 +680,10 @@ void FittingMetric::form_eig_inverse_DPC() {
             }
         }
     }
-    
+
+    outfile->Printf("DPC/TR truncation: kept %d / %d modes (ratio = %.6f)\n",
+                    nkept, naux, trunc_ratio);
+
     metric_flat.clear();
     eigval.clear();
     
@@ -881,6 +912,8 @@ void FittingMetric::form_eig_inverse_TR() {
     algorithm_ = "TR"; 
     TR_ = true;
 
+
+    outfile->Printf("DPC-weighted filter for TR \n");
     form_fitting_metric();
 
     auto zero = BasisSet::zero_ao_basis_set();
@@ -1042,6 +1075,15 @@ void FittingMetric::form_eig_inverse_TR() {
 
     std::cout << "\n metric:" << std::endl;
     metric_->zero();
+
+    // count kept modes (truncated dimension)
+    int nkept = 0;
+    for (int i = 0; i < naux; ++i) {
+        if (d[i] != 0.0) ++nkept;           // or std::abs(d[i]) > 0.0
+    }
+
+    const double trunc_ratio = static_cast<double>(nkept) / static_cast<double>(naux);
+
     // --- Reconstruct inverse metric ---
     for (int i = 0; i < naux; i++) {
 	const double di = d[i];
@@ -1053,6 +1095,9 @@ void FittingMetric::form_eig_inverse_TR() {
             }
         }
     }
+
+    outfile->Printf("DPC/TR truncation: kept %d / %d modes (ratio = %.6f)\n",
+                nkept, naux, trunc_ratio);
 
     double norm = 0.0;
     for (int i = 0; i < naux; i++)

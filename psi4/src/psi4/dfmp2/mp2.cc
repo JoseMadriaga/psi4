@@ -419,9 +419,9 @@ SharedMatrix DFMP2::form_inverse_metric() {
 	if (options_.get_str("mp2_type") == "DPC") { 
             metric->form_eig_inverse_DPC();
 	}
-	//else if (options_.get_str("mp2_type") == "DPC_filter") {
-        //    metric->form_eig_inverse_filter();
-        //}
+	else if (options_.get_str("mp2_type") == "TR") {
+            metric->form_eig_inverse_TR();
+        }
         else {
 	    metric->form_eig_inverse();
         }	    

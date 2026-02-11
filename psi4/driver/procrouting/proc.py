@@ -124,7 +124,7 @@ def select_mp2(name, **kwargs):
                 func = run_dfocc
             elif module in ['', 'DFMP2']:
                 func = run_dfmp2
-        elif mtd_type == 'DPC_filter':      
+        elif mtd_type == 'TR':      
             if module == 'OCC':
                 func = run_dfocc
             elif module in ['', 'DFMP2']:
