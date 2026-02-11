@@ -411,7 +411,6 @@ SharedMatrix DFMP2::form_inverse_metric() {
 
     } else {
         // Form the inverse metric manually
-	std::cout << "grabbing FittingMetric object" << std::endl;
         auto metric = std::make_shared<FittingMetric>(ribasis_, true);
         //commenting out for now to use form_eig_inverse_DPC();
 	//metric->form_eig_inverse(options_.get_double("DF_FITTING_CONDITION"));

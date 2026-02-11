@@ -69,6 +69,7 @@ class PSI_API FittingMetric {
 
     /// Is the metric using DPC + Tikhonov regularization technique
     bool DPC_;
+    bool TR_;
 
     /// Reference wavefunction used for DPC RHS
     SharedWavefunction reference_wavefunction_; 
@@ -114,8 +115,10 @@ class PSI_API FittingMetric {
     void form_QR_inverse(double tol = 1.0E-10);
     /// Build the eigendecomposed half inverse metric (calls form_fitting_metric)
     void form_eig_inverse(double tol = 1.0E-10);
-    /// Build the eigendecomposed half inverse metric using DPC with Tikhonov (calls form_fitting_metric) 
+    /// Build the eigendecomposed half inverse metric using DPC with Tikhonov to determine hard cutoff (calls form_fitting_metric) 
     void form_eig_inverse_DPC();
+    /// Build the eigendecomposed half inverse metruc using DPC with Tikhonov to filter small eigenvalues (calls form_fitting_metric)
+    void form_eig_inverse_TR();
     void set_reference_wfn(SharedWavefunction ref_wfn) {
     reference_wavefunction_ = ref_wfn;
     }
