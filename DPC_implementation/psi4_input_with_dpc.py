@@ -1,5 +1,4 @@
 import numpy as np
-import psi4
 import math
 from psi4.driver import constants
 
