@@ -1,2 +1,0 @@
-/home/jorge/Codes/anaconda3/envs/p4dev/bin/x86_64-conda-linux-gnu-ar qc libmoinfo.a CMakeFiles/moinfo.dir/model_space.cc.o CMakeFiles/moinfo.dir/model_space_build.cc.o CMakeFiles/moinfo.dir/moinfo.cc.o CMakeFiles/moinfo.dir/moinfo_base.cc.o CMakeFiles/moinfo.dir/moinfo_mappings.cc.o CMakeFiles/moinfo.dir/moinfo_model_space.cc.o CMakeFiles/moinfo.dir/moinfo_scf.cc.o CMakeFiles/moinfo.dir/moinfo_slaterdeterminant.cc.o CMakeFiles/moinfo.dir/slater_determinant.cc.o
-/home/jorge/Codes/anaconda3/envs/p4dev/bin/x86_64-conda-linux-gnu-ranlib libmoinfo.a

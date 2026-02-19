@@ -1,2 +1,0 @@
-/home/jorge/Codes/anaconda3/envs/p4dev/bin/x86_64-conda-linux-gnu-ar qc libplugin.a CMakeFiles/plugin.dir/close_plugin.cc.o CMakeFiles/plugin.dir/load_plugin.cc.o
-/home/jorge/Codes/anaconda3/envs/p4dev/bin/x86_64-conda-linux-gnu-ranlib libplugin.a

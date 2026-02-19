@@ -1,2 +1,0 @@
-/home/jorge/Codes/anaconda3/envs/p4dev/bin/x86_64-conda-linux-gnu-ar qc libdlpno.a CMakeFiles/dlpno.dir/mp2.cc.o CMakeFiles/dlpno.dir/wrapper.cc.o CMakeFiles/dlpno.dir/sparse.cc.o
-/home/jorge/Codes/anaconda3/envs/p4dev/bin/x86_64-conda-linux-gnu-ranlib libdlpno.a

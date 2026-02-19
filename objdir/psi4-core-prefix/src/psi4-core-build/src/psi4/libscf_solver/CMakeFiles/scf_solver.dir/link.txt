@@ -1,2 +1,0 @@
-/home/jorge/Codes/anaconda3/envs/p4dev/bin/x86_64-conda-linux-gnu-ar qc libscf_solver.a CMakeFiles/scf_solver.dir/cuhf.cc.o CMakeFiles/scf_solver.dir/frac.cc.o CMakeFiles/scf_solver.dir/hf.cc.o CMakeFiles/scf_solver.dir/mom.cc.o CMakeFiles/scf_solver.dir/rhf.cc.o CMakeFiles/scf_solver.dir/rohf.cc.o CMakeFiles/scf_solver.dir/sad.cc.o CMakeFiles/scf_solver.dir/stability.cc.o CMakeFiles/scf_solver.dir/uhf.cc.o
-/home/jorge/Codes/anaconda3/envs/p4dev/bin/x86_64-conda-linux-gnu-ranlib libscf_solver.a

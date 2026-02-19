@@ -1,2 +1,0 @@
-/home/jorge/Codes/anaconda3/envs/p4dev/bin/x86_64-conda-linux-gnu-ar qc libfunctional.a CMakeFiles/functional.dir/LibXCfunctional.cc.o CMakeFiles/functional.dir/factory.cc.o CMakeFiles/functional.dir/functional.cc.o CMakeFiles/functional.dir/superfunctional.cc.o
-/home/jorge/Codes/anaconda3/envs/p4dev/bin/x86_64-conda-linux-gnu-ranlib libfunctional.a

@@ -1,2 +1,0 @@
-/home/jorge/Codes/anaconda3/envs/p4dev/bin/x86_64-conda-linux-gnu-ar qc libambit_interface.a CMakeFiles/ambit_interface.dir/convert.cc.o CMakeFiles/ambit_interface.dir/integrals.cc.o
-/home/jorge/Codes/anaconda3/envs/p4dev/bin/x86_64-conda-linux-gnu-ranlib libambit_interface.a

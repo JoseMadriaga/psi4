@@ -1,2 +1,0 @@
-/home/jorge/Codes/anaconda3/envs/p4dev/bin/x86_64-conda-linux-gnu-ar qc libiwl.a CMakeFiles/iwl.dir/buf_close.cc.o CMakeFiles/iwl.dir/buf_fetch.cc.o CMakeFiles/iwl.dir/buf_flush.cc.o CMakeFiles/iwl.dir/buf_init.cc.o CMakeFiles/iwl.dir/buf_put.cc.o CMakeFiles/iwl.dir/buf_wrt.cc.o CMakeFiles/iwl.dir/buf_wrt_mat.cc.o CMakeFiles/iwl.dir/buf_wrt_val.cc.o CMakeFiles/iwl.dir/rdone.cc.o CMakeFiles/iwl.dir/wrtone.cc.o
-/home/jorge/Codes/anaconda3/envs/p4dev/bin/x86_64-conda-linux-gnu-ranlib libiwl.a
