@@ -293,6 +293,9 @@ class PSI_API BasisSet {
      *  @param si Shell number
      *  @return A shared pointer to the GaussianShell object for the i'th shell.
      */
+
+    void apply_hermite_normalization();
+
     const GaussianShell &shell(int center, int si) const;
 
     /// Return the number of core electrons associated with this (ECP) basisset, for the specified label.
