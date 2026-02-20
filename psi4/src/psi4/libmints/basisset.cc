@@ -155,8 +155,6 @@ void BasisSet::initialize_singletons() {
     initialized_shared_ = true;
 }
 
-std::shared_ptr<Molecule> BasisSet::molecule() const { return molecule_; }
-
 void BasisSet::apply_hermite_normalization() {
     for (int sh = 0; sh < n_shells_; ++sh) {
         auto &p4shell = shells_[sh];
@@ -164,7 +162,7 @@ void BasisSet::apply_hermite_normalization() {
         assert(l2shell.ncontr() == 1);
 
         int L = p4shell.am();
-        int offset = std::distance((const double*)ucoefficients_, p4shell.coefs());
+        int offset = std::distance((const double*)&ucoefficients_, p4shell.coefs());
         for(int j = 0; j < p4shell.nprimitive(); j++) {
             double ex = p4shell.exp(j);
             double coef = p4shell.original_coef(j);
