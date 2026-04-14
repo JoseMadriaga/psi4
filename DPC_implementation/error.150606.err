@@ -1,0 +1,1 @@
+/var/spool/slurmd/job150606/slurm_script: line 15: 2967077 Segmentation fault      (core dumped) /home/dal585883/work/Psi4_DPC/psi4/objdir_p4dev/stage/bin/psi4 psi4_input_with_dpc.py > output_reg6_b3lyp_A4.dat

@@ -1653,6 +1653,8 @@ void export_mints(py::module& m) {
              "Append a vector of charge tuples to a current ExternalPotential")
         .def("addBasis", &ExternalPotential::addBasis, "Add a basis of S auxiliary functions with DF coefficients",
              "basis"_a, "coefs"_a)
+	.def("addExchangeBasis", &ExternalPotential::addExchangeBasis, "Add a basis of auxiliary functions obtained to describe exchange via overlap integrals",
+             "basis"_a, "coefs"_a)
         .def("gradient_on_charges", &ExternalPotential::gradient_on_charges, "Get the gradient on the embedded charges")
         .def("clear", &ExternalPotential::clear, "Reset the field to zero (eliminates all entries)")
         .def("computePotentialMatrix", &ExternalPotential::computePotentialMatrix,

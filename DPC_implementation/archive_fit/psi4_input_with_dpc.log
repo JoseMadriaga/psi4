@@ -1,0 +1,12 @@
+2026-02-20:15:02:50,606 INFO     [psi4.driver.task_planner:259] PLANNING Atomic:  keywords={'PRINT': 1, 'PUREAM': 0, 'SCF_TYPE': 'DF', 'function_kwargs': {}}
+2026-02-20:15:02:50,608 INFO     [psi4.driver.driver:529] Compute energy(): method=wb97x-d, basis=aug-cc-pvdz, molecule=default, nre=9.186245274729828
+2026-02-20:15:02:59,402 INFO     [psi4.driver.driver:532] Return energy(): -76.42061383290063
+2026-02-20:15:02:59,429 INFO     [psi4.driver.task_planner:259] PLANNING Atomic:  keywords={'SCF__INTS_TOLERANCE': 1e-12, 'PRINT': 1, 'PUREAM': 0, 'SCF_TYPE': 'DF', 'function_kwargs': {}}
+2026-02-20:15:02:59,431 INFO     [psi4.driver.driver:529] Compute energy(): method=wb97x-d, basis=aug-cc-pvdz, molecule=default, nre=9.05800384780602
+2026-02-20:15:03:00,283 INFO     [psi4.driver.driver:532] Return energy(): -76.42072884169843
+2026-02-20:15:03:00,324 INFO     [psi4.driver.task_planner:259] PLANNING Atomic:  keywords={'EXTERN': 1, 'SCF__INTS_TOLERANCE': 1e-12, 'PRINT': 1, 'PUREAM': 0, 'SCF_TYPE': 'DF', 'function_kwargs': {}}
+2026-02-20:15:03:00,326 INFO     [psi4.driver.driver:529] Compute energy(): method=wb97x-d, basis=aug-cc-pvdz, molecule=default, nre=9.05800384780602
+2026-02-20:15:03:01,174 INFO     [psi4.driver.driver:532] Return energy(): -76.42072884169843
+2026-02-20:15:03:01,225 INFO     [psi4.driver.task_planner:259] PLANNING Atomic:  keywords={'EXTERN': 1, 'SCF__INTS_TOLERANCE': 1e-12, 'PRINT': 1, 'PUREAM': 0, 'SCF_TYPE': 'DF', 'function_kwargs': {}}
+2026-02-20:15:03:01,227 INFO     [psi4.driver.driver:529] Compute energy(): method=wb97x-d, basis=aug-cc-pvdz, molecule=default, nre=9.05800384780602
+2026-02-20:15:03:02,58 INFO     [psi4.driver.driver:532] Return energy(): -76.42072884169843

@@ -25,6 +25,10 @@
  *
  * @END LICENSE
  */
+
+//GEM
+#include "psi4/libmints/3coverlap.h"
+
 #include "psi4/libmints/extern.h"
 #include "psi4/libmints/molecule.h"
 #include "psi4/libmints/basisset.h"
@@ -42,6 +46,8 @@
 #include <omp.h>
 #endif
 
+//GEM
+#include <algorithm>
 namespace psi {
 
 ExternalPotential::ExternalPotential() : debug_(0), print_(1) {}
@@ -51,6 +57,8 @@ ExternalPotential::~ExternalPotential() {}
 void ExternalPotential::clear() {
     charges_.clear();
     bases_.clear();
+    //GEM
+    exchange_bases_.clear();
 }
 
 void ExternalPotential::addCharge(double Z, double x, double y, double z) {
@@ -59,6 +67,11 @@ void ExternalPotential::addCharge(double Z, double x, double y, double z) {
 
 void ExternalPotential::addBasis(std::shared_ptr<BasisSet> basis, SharedVector coefs) {
     bases_.push_back(std::make_pair(basis, coefs));
+}
+
+//GEM
+void ExternalPotential::addExchangeBasis(std::shared_ptr<BasisSet> basis, SharedVector coefs) {
+	exchange_bases_.push_back(std::make_pair(basis, coefs));
 }
 
 SharedMatrix ExternalPotential::gradient_on_charges() { return gradient_on_charges_; }
@@ -92,7 +105,24 @@ void ExternalPotential::print(const std::string& out) const {
             }
         }
     }
+
+    // GEM modif
+    // Exchange Bases
+    if (exchange_bases_.size()) {
+        printer->Printf("    > Diffuse Exchange Bases < \n\n");
+        for (size_t i = 0; i < exchange_bases_.size(); i++) {
+            printer->Printf("    Molecule %d\n\n", i + 1);
+            exchange_bases_[i].first->molecule()->print();
+            printer->Printf("    Basis %d\n\n", i + 1);
+            exchange_bases_[i].first->print_by_level(out, print_);
+            if (print_ > 2) {
+                printer->Printf("    Exchange Overlap Coefficients %d\n\n", i + 1);
+                exchange_bases_[i].second->print();
+            }
+        }
+    }
 }
+
 
 SharedMatrix ExternalPotential::computePotentialMatrix(std::shared_ptr<BasisSet> basis) {
     int n = basis->nbf();
@@ -198,6 +228,42 @@ SharedMatrix ExternalPotential::computePotentialMatrix(std::shared_ptr<BasisSet>
         }
     }
 
+    //GEM
+    for (size_t ind = 0; ind < exchange_bases_.size(); ind++) {
+        std::shared_ptr<BasisSet> aux = exchange_bases_[ind].first;
+        SharedVector d = exchange_bases_[ind].second;
+
+        // TODO thread this
+        auto fact3 = std::make_shared<IntegralFactory>(aux, basis, basis, BasisSet::zero_ao_basis_set());
+        std::shared_ptr<ThreeCenterOverlapInt> o3c(fact3->overlap_3c());
+
+        double **Vp = V->pointer();
+        double *dp = d->pointer();
+
+        for (int Q = 0; Q < aux->nshell(); Q++) {
+            int numQ = aux->shell(Q).nfunction();
+            int Qstart = aux->shell(Q).function_index();
+            for (int M = 0; M < basis->nshell(); M++) {
+                int numM = basis->shell(M).nfunction();
+                int Mstart = basis->shell(M).function_index();
+                for (int N = 0; N < basis->nshell(); N++) {
+                    int numN = basis->shell(N).nfunction();
+                    int Nstart = basis->shell(N).function_index();
+
+                    o3c->compute_shell(Q, M, N);
+                    const double *buffer = o3c->buffers()[0];
+
+                    for (int oq = 0, index = 0; oq < numQ; oq++) {
+                        for (int om = 0; om < numM; om++) {
+                            for (int on = 0; on < numN; on++, index++) {
+                                Vp[om + Mstart][on + Nstart] += dp[oq + Qstart] * buffer[index];
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
     return V;
 }
 
@@ -324,6 +390,136 @@ SharedMatrix ExternalPotential::computePotentialGradients(std::shared_ptr<BasisS
             }
         }
     }
+
+//    if (bases_.size()) {
+//        //                       x              x
+//        // Add the contribution V  <- d_A (A|PQ)
+//        //
+//
+//        // Potential derivatives
+//        for (size_t ind = 0; ind < bases_.size(); ind++) {
+//        int thread = 0;
+//#ifdef _OPENMP
+//        //thread = omp_get_thread_num();
+//        thread = Process::environment.get_n_threads();
+//#endif
+//            std::shared_ptr<BasisSet> aux = bases_[ind].first;
+//            SharedVector d = bases_[ind].second;
+//            const double *pD = d->pointer();
+//
+//            const auto &zero = BasisSet::zero_ao_basis_set();
+//            auto Afact = std::make_shared<IntegralFactory>(aux, zero, zero, zero);
+//            //std::shared_ptr<PotentialInt> pot(static_cast<PotentialInt *>(Afact->ao_potential(1)));
+//            //std::vector<std::shared_ptr<PotentialInt> pot;
+//            std::shared_ptr<PotentialInt> pot(dynamic_cast<PotentialInt *>(fact->ao_potential(1).release()));
+//	    auto Zxyz = std::make_shared<Matrix>("Charges (Z,x,y,z)", 1, 4);
+//            double **Zxyzp = Zxyz->pointer();
+//            for (size_t t = 0; t < thread; ++t) {
+//            for (int atom = 0; atom < mol->natom(); atom++) {
+//                Zxyzp[0][0] = mol->Z(atom);
+//                Zxyzp[0][1] = mol->x(atom);
+//                Zxyzp[0][2] = mol->y(atom);
+//                Zxyzp[0][3] = mol->z(atom);
+//
+//		for (int A = 0; A < aux->nshell(); A++) {
+//	      
+//                    pot->compute_shell_deriv1_no_charge_term(A, 0);
+//                    const auto* buffer = pot[thread]->buffers()[0];
+//
+//                    const auto &shellA = aux->shell(A);
+//                    int aA = shellA.ncenter();
+//                    int nA = shellA.nfunction();
+//                    int oA = shellA.function_index();
+//
+//                    const double *intAx = buffer + 3 * aA * nA + 0 * nA;
+//                    const double *intAy = buffer + 3 * aA * nA + 1 * nA;
+//                    const double *intAz = buffer + 3 * aA * nA + 2 * nA;
+//
+//                    for (int a = 0; a < nA; a++) {
+//                        double prefac = pD[a + oA];
+//                        Gp[atom][0] -= prefac * (*intAx);
+//                        Gp[atom][1] -= prefac * (*intAy);
+//                        Gp[atom][2] -= prefac * (*intAz);
+//                        ++intAx;
+//                        ++intAy;
+//                        ++intAz;
+//                    }
+//                }
+//            }
+//            }
+//
+//            auto APQfact = std::make_shared<IntegralFactory>(aux, zero, basis, basis);
+//            std::vector<std::shared_ptr<TwoBodyAOInt> > eri;
+//            for (int t = 0; t < threads; t++) {
+//                eri.push_back(std::shared_ptr<TwoBodyAOInt>(APQfact->eri(1)));
+//            }
+//            long int nAPQ = aux->nshell() * PQ_pairs.size();
+//#pragma omp parallel for schedule(dynamic) num_threads(threads)
+//            for (long int APQ = 0L; APQ < nAPQ; APQ++) {
+//                int thread = 0;
+//#ifdef _OPENMP
+//                thread = omp_get_thread_num();
+//#endif
+//                size_t A = APQ / PQ_pairs.size();
+//                size_t PQ = APQ % PQ_pairs.size();
+//                int P = PQ_pairs[PQ].first;
+//                int Q = PQ_pairs[PQ].second;
+//
+//                eri[thread]->compute_shell_deriv1(A, 0, P, Q);
+//
+//                double **Vp = Vtemps[thread]->pointer();
+//                double **Dp = Dt->pointer();
+//
+//                // We don't need any derivatives w.r.t. the external potential center (A| here
+//                const auto &shellA = aux->shell(A);
+//                int nA = shellA.nfunction();
+//                int oA = shellA.function_index();
+//
+//                const auto &shellP = basis->shell(P);
+//                int nP = shellP.nfunction();
+//                int aP = shellP.ncenter();
+//                int oP = shellP.function_index();
+//
+//               const auto &shellQ = basis->shell(Q);
+//                int nQ = shellQ.nfunction();
+//                int aQ = shellQ.ncenter();
+//                int oQ = shellQ.function_index();
+//
+//                const auto &buffers = eri[thread]->buffers();
+//                const double *Px = buffers[3];
+//                const double *Py = buffers[4];
+//                const double *Pz = buffers[5];
+//                const double *Qx = buffers[6];
+//                const double *Qy = buffers[7];
+//                const double *Qz = buffers[8];
+//
+//                double perm = (P == Q ? 1.0 : 2.0);
+//
+//                for (int a = 0; a < nA; a++) {
+//                    double scale_fac = perm * pD[a + oA];
+//                    for (int p = 0; p < nP; p++) {
+//                        for (int q = 0; q < nQ; q++) {
+//                            double val = scale_fac * Dp[p + oP][q + oQ];
+//                            Vp[aP][0] += val * (*Px);
+//                            Vp[aP][1] += val * (*Py);
+//                            Vp[aP][2] += val * (*Pz);
+//                            Vp[aQ][0] += val * (*Qx);
+//                            Vp[aQ][1] += val * (*Qy);
+//                            Vp[aQ][2] += val * (*Qz);
+//
+//                            Px++;
+//                            Py++;
+//                            Pz++;
+//                            Qx++;
+//                            Qy++;
+//                            Qz++;
+//                       }
+//                    }
+//                }
+//            }
+//        }
+//    }
+		
 
     for (int t = 0; t < threads; t++) {
         grad_on_atoms->add(Vtemps[t]);

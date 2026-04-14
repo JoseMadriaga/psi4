@@ -50,6 +50,8 @@
 #include "coordentry.h"
 #include "psi4/libpsi4util/process.h"
 
+//GEM
+#include <cassert>
 #include <memory>
 #include <regex>
 #include <stdexcept>
@@ -156,27 +158,39 @@ void BasisSet::initialize_singletons() {
 }
 
 void BasisSet::apply_hermite_normalization() {
+   outfile->Printf("starting normalization\n"); 	
     for (int sh = 0; sh < n_shells_; ++sh) {
+	outfile->Printf("first loop", sh);    
         auto &p4shell = shells_[sh];
         auto &l2shell = l2_shells_[sh];
         assert(l2shell.ncontr() == 1);
 
         int L = p4shell.am();
+	outfile->Printf("offset \n");
         int offset = std::distance((const double*)&ucoefficients_, p4shell.coefs());
         for(int j = 0; j < p4shell.nprimitive(); j++) {
+            outfile->Printf("second loop \n");
             double ex = p4shell.exp(j);
             double coef = p4shell.original_coef(j);
             double factor = sqrt(2.0) * pow(M_PI/ex, 2.5) * pow(fac[L], 2) / pow(4.0*ex, L);
             /* Find the normalization for the x^Ly^0z^0 term S(0,0,0), P(1,0,0) and D(2,0,0) */
             double norm = 0;
+	    outfile->Printf("going to third loop \n");
             for(int ix=0; ix<=L/2; ix++) {
                 for(int jx=0; jx<=L/2; jx++) {
+		    outfile->Printf("doing denom \n");
                     int denom = fac[ix] * fac[jx] * fac[L-2*ix] * fac[L-2*jx] * (2*(L-ix-jx)+1);
                     norm = norm + pow(-1.0, ix+jx) * df[2*(L-ix-jx)] / denom;
                 }
             }
+	    outfile->Printf("going to norm it now \n");
             norm = 1.0 / sqrt(norm*factor);
-            ucoefficients_[j+offset] = coef * norm;
+	    outfile->Printf("going to ucoef it now \n");
+	    outfile->Printf("coef = %d", coef);
+	    outfile->Printf("norm = %d", norm);
+            outfile->Printf("ucoef = %d", ucoefficients_[j+offset]);
+	    ucoefficients_[j+offset] = coef * norm;
+	    outfile->Printf("going to l3shell it now \n");
             l2shell.contr[0].coeff[j] = coef * norm;
         }
     }

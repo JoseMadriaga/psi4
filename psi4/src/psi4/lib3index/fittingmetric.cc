@@ -49,6 +49,13 @@
 #include "psi4/libmints/wavefunction.h"
 #include <iostream>
 
+#include <fstream>
+#include <iomanip>
+#include <sstream>
+
+//DPC added
+#include <stdexcept>
+
 // MKL Header
 #ifdef USING_LAPACK_MKL
 #include <mkl.h>
@@ -572,7 +579,7 @@ void FittingMetric::form_eig_inverse_DPC() {
     
     std::cout << "RHS generation completed successfully" << std::endl;
 
-
+    /// -----------------------------------comment below ---------------
     //std::cout << "prior to generate three-centered and two body integrals" << std::endl;
     //// --- Compute RHS on-the-fly (memory efficient) ---
     //std::vector<double> rhs(naux, 0.0);
@@ -605,90 +612,95 @@ void FittingMetric::form_eig_inverse_DPC() {
     //            }
     //        }
     //    }
-    //} 
-    std::cout << "prior to T_flat" << std::endl;
-    // --- Flatten metric into contiguous vector for diagonalization ---
-    std::vector<double> metric_flat(naux * naux, 0.0);
-    for (int i = 0; i < naux; i++)
-        for (int j = 0; j < naux; j++)
-            metric_flat[i * naux + j] = (*metric_)(i,j);
-    
-    std::cout << "prior to diagonalize" << std::endl;
-    // --- Diagonalize metric (C_DSYEV requires contiguous memory) ---
-    std::vector<double> eigval(naux, 0.0);
-    int lwork = naux * 3;
-    std::vector<double> work(lwork, 0.0);
-    
-    int stat = C_DSYEV('v', 'u', naux, metric_flat.data(), naux, eigval.data(), work.data(), lwork);
-    if (stat != 0)
-        throw std::runtime_error("C_DSYEV failed to diagonalize metric");
-    
-    work.clear();  // free workspace
-    
-    std::cout << "prior to picard_coef" << std::endl;
-    // --- Compute Picard coefficients ---
-    std::vector<double> sigma(naux, 0.0);
-    std::vector<double> picard(naux, 0.0);
-    for (int i = 0; i < naux; i++) {
-        sigma[i] = std::sqrt(std::abs(eigval[i]));
-    
-        double dotprod = 0.0;
-        for (int P = 0; P < naux; P++)
-            dotprod += metric_flat[P + i * naux] * rhs[P];  // use flat eigenvectors
-    
-        picard[i] = std::abs(dotprod) / sigma[i];
-    }
-    
-    rhs.clear();  // free memory
-    
-    std::cout << "prior to determining eps_opt" << std::endl;
-    // --- Find knee of Picard coefficients ---
-    double epsilon_opt = 0.0;
-    for (int i = 0; i < naux - 1; i++) {
-        if (picard[i+1] > picard[i]) {
-            epsilon_opt = sigma[i];
-            break;
-        }
-    }
-    double tol = epsilon_opt * epsilon_opt;
-    std::cout << "tol " << tol << std::endl;
-    
-    picard.clear();
-    sigma.clear();  // free memory
-    
-    std::cout << "prior to inverse metric" << std::endl;
-    // --- Reconstruct inverse metric ---
-    for (int r = 0; r < naux; r++)
-        for (int c = 0; c < naux; c++)
-            (*metric_)(r,c) = 0.0;
+    //}
 
-    // count kept modes (truncated dimension)
-    int nkept = 0;
-    for (int i = 0; i < naux; ++i) {
-        if (eigval[i] != 0.0) ++nkept;           // or std::abs(d[i]) > 0.0
-    }
+    // ----------------------------comment above -----------
 
-    const double trunc_ratio = static_cast<double>(nkept) / static_cast<double>(naux);
+    //std::cout << "prior to T_flat" << std::endl;
+    //// --- Flatten metric into contiguous vector for diagonalization ---
+    //std::vector<double> metric_flat(naux * naux, 0.0);
+    //for (int i = 0; i < naux; i++)
+    //    for (int j = 0; j < naux; j++)
+    //        metric_flat[i * naux + j] = (*metric_)(i,j);
+    //
+    //std::cout << "prior to diagonalize" << std::endl;
+    //// --- Diagonalize metric (C_DSYEV requires contiguous memory) ---
+    //std::vector<double> eigval(naux, 0.0);
+    //int lwork = naux * 3;
+    //std::vector<double> work(lwork, 0.0);
+    //
+    //int stat = C_DSYEV('v', 'u', naux, metric_flat.data(), naux, eigval.data(), work.data(), lwork);
+    //if (stat != 0)
+    //    throw std::runtime_error("C_DSYEV failed to diagonalize metric");
+    //
+    //work.clear();  // free workspace
+    //
+    //std::cout << "prior to picard_coef" << std::endl;
+    //// --- Compute Picard coefficients ---
+    //std::vector<double> sigma(naux, 0.0);
+    //std::vector<double> picard(naux, 0.0);
+    //for (int i = 0; i < naux; i++) {
+    //    sigma[i] = std::sqrt(std::abs(eigval[i]));
+    //
+    //    double dotprod = 0.0;
+    //    for (int P = 0; P < naux; P++)
+    //        dotprod += metric_flat[P + i * naux] * rhs[P];  // use flat eigenvectors
+    //
+    //    picard[i] = std::abs(dotprod) / sigma[i];
+    //}
+    //
+    //rhs.clear();  // free memory
+    //
+    //std::cout << "prior to determining eps_opt" << std::endl;
+    //// --- Find knee of Picard coefficients ---
+    //double epsilon_opt = 0.0;
+    //for (int i = 0; i < naux - 1; i++) {
+    //    if (picard[i+1] > picard[i]) {
+    //        epsilon_opt = sigma[i];
+    //        break;
+    //    }
+    //}
+    //double tol = epsilon_opt * epsilon_opt;
+    //std::cout << "tol " << tol << std::endl;
+    //
+    //picard.clear();
+    //sigma.clear();  // free memory
+    //
+    //std::cout << "prior to inverse metric" << std::endl;
+    //// --- Reconstruct inverse metric ---
+    //for (int r = 0; r < naux; r++)
+    //    for (int c = 0; c < naux; c++)
+    //        (*metric_)(r,c) = 0.0;
 
-    for (int i = 0; i < naux; i++) {
-        if (eigval[i] > tol) {
-            double inv_sqrt = 1.0 / std::sqrt(eigval[i]);
-            for (int r = 0; r < naux; r++) {
-                for (int c = 0; c < naux; c++) {
-                    (*metric_)(r,c) += metric_flat[r + i*naux] * inv_sqrt * metric_flat[c + i*naux];
-                }
-            }
-        }
-    }
+    //// count kept modes (truncated dimension)
+    //int nkept = 0;
+    //for (int i = 0; i < naux; ++i) {
+    //    if (eigval[i] != 0.0) ++nkept;           // or std::abs(d[i]) > 0.0
+    //}
 
-    outfile->Printf("DPC/TR truncation: kept %d / %d modes (ratio = %.6f)\n",
-                    nkept, naux, trunc_ratio);
+    //const double trunc_ratio = static_cast<double>(nkept) / static_cast<double>(naux);
 
-    metric_flat.clear();
-    eigval.clear();
-    
-    metric_->set_name("SO Basis Fitting Inverse (DPC)");
+    //for (int i = 0; i < naux; i++) {
+    //    if (eigval[i] > tol) {
+    //        double inv_sqrt = 1.0 / std::sqrt(eigval[i]);
+    //        for (int r = 0; r < naux; r++) {
+    //            for (int c = 0; c < naux; c++) {
+    //                (*metric_)(r,c) += metric_flat[r + i*naux] * inv_sqrt * metric_flat[c + i*naux];
+    //            }
+    //        }
+    //    }
+    //}
 
+    //outfile->Printf("DPC/TR truncation: kept %d / %d modes (ratio = %.6f)\n",
+    //                nkept, naux, trunc_ratio);
+
+    //metric_flat.clear();
+    //eigval.clear();
+    //
+    //metric_->set_name("SO Basis Fitting Inverse (DPC)");
+
+
+    // ------------------ comment below ------------------
     //is_inverted_ = true;
     //algorithm_ = "DPC";
     //DPC_ = true;
@@ -906,206 +918,678 @@ void FittingMetric::form_eig_inverse_DPC() {
     //norm = std::sqrt(norm);
     //std::cout << "norm " << norm << std::endl;
     //metric_->set_name("SO Basis Fitting Inverse (DPC)");
-}
-void FittingMetric::form_eig_inverse_TR() {
-    is_inverted_ = true;
-    algorithm_ = "TR"; 
-    TR_ = true;
+    /// ------------------ comment above --------------------  
 
-
-    outfile->Printf("DPC-weighted filter for TR \n");
-    form_fitting_metric();
-
-    auto zero = BasisSet::zero_ao_basis_set();
-    auto basis = reference_wavefunction_->basisset();
-    auto eri_fact = std::make_shared<IntegralFactory>(aux_, zero, basis, basis);
-    auto eri = std::shared_ptr<TwoBodyAOInt>(eri_fact->eri());
-
-    SharedMatrix D_ao = reference_wavefunction_->Da();
-    if (!D_ao) {
-        throw std::runtime_error("D_ao is null");
-    }
-
-    int naux = aux_->nbf();
-    int nbf  = basis->nbf();
-
-    if (D_ao->nrow() != nbf || D_ao->ncol() != nbf) {
-        throw std::runtime_error("D_ao dimension mismatch");
-    }
-
-    std::vector<double> rhs(naux, 0.0);
-
-    // zero basis info
-    int n0 = zero->shell(0).nfunction();
-    if (n0 <= 0) {
-        throw std::runtime_error("Zero basis has invalid nfunction");
-    }
-
-    for (int P = 0; P < aux_->nshell(); P++) {
-
-        const auto& Pshell = aux_->shell(P);
-        int np = Pshell.nfunction();
-        int pstart = Pshell.function_index();
-
-        if (pstart < 0 || pstart + np > naux) {
-            throw std::runtime_error("Aux shell index out of bounds");
-        }
-
-        for (int M = 0; M < basis->nshell(); M++) {
-
-            const auto& Mshell = basis->shell(M);
-            int nm = Mshell.nfunction();
-            int mstart = Mshell.function_index();
-
-            if (mstart < 0 || mstart + nm > nbf) {
-                throw std::runtime_error("Basis shell M index out of bounds");
-	    }
-
-            for (int N = 0; N < basis->nshell(); N++) {
-
-                const auto& Nshell = basis->shell(N);
-                int nn = Nshell.nfunction();
-                int nstart = Nshell.function_index();
-
-                if (nstart < 0 || nstart + nn > nbf) {
-                    throw std::runtime_error("Basis shell N index out of bounds");
-                }
-
-                // Compute (P | 0 M N)
-                eri->compute_shell(P, 0, M, N);
-                const double* buffer = eri->buffer();
-
-                if (!buffer) {
-                    throw std::runtime_error("ERI buffer is null");
-                }
-
-                int expected_size = np * n0 * nm * nn;
-                int index = 0;
-
-                for (int p = 0; p < np; p++) {
-                    for (int q = 0; q < n0; q++) {
-                        for (int m = 0; m < nm; m++) {
-                            for (int n = 0; n < nn; n++) {
-
-                                int Pidx = p + pstart;
-                                int midx = m + mstart;
-                                int nidx = n + nstart;
-
-                                rhs[Pidx] += buffer[index]
-                                             * (*D_ao)(midx, nidx);
-                                index++;
-                            }
-                        }
-                    }
-                }
-
-                if (index != expected_size) {
-                    throw std::runtime_error("ERI buffer index mismatch");
-                }
-            }
-        }
-    }
-
+    /// ------ ad hoc sort of numer and sigma to descending order -----------
+    //std::cout << "prior to T_flat" << std::endl;
     // --- Flatten metric into contiguous vector for diagonalization ---
     std::vector<double> metric_flat(naux * naux, 0.0);
     for (int i = 0; i < naux; i++)
         for (int j = 0; j < naux; j++)
-            metric_flat[i * naux + j] = (*metric_)(i,j);
+            metric_flat[i * naux + j] = (*metric_)(i, j);
 
+    std::vector<double> A_flat(naux * naux, 0.0);
+    A_flat = metric_flat;
+
+    std::cout << "prior to diagonalize" << std::endl;
     // --- Diagonalize metric (C_DSYEV requires contiguous memory) ---
     std::vector<double> eigval(naux, 0.0);
     int lwork = naux * 3;
     std::vector<double> work(lwork, 0.0);
 
-    int stat = C_DSYEV('v', 'u', naux, metric_flat.data(), naux, eigval.data(), work.data(), lwork);
+    int stat = C_DSYEV('v', 'u', naux, metric_flat.data(), naux,
+                       eigval.data(), work.data(), lwork);
     if (stat != 0)
         throw std::runtime_error("C_DSYEV failed to diagonalize metric");
 
     work.clear();  // free workspace
 
-    // --- Compute Picard coefficients ---
+    // ------------- adding sort of sigma and uT ---------------------
+    // --- Reverse ascending -> descending while preserving correspondence ---
+    std::vector<double> eigval_desc(naux, 0.0);
+    std::vector<double> metric_desc(naux * naux, 0.0);
+    
+    for (int new_col = 0; new_col < naux; ++new_col) {
+        int old_col = naux - 1 - new_col;
+        eigval_desc[new_col] = eigval[old_col];
+    
+        for (int row = 0; row < naux; ++row) {
+            metric_desc[row + new_col * naux] = metric_flat[row + old_col * naux];
+        }
+    }
+    
+    //eigval = std::move(eigval_desc);
+    //metric_flat = std::move(metric_desc);
+    // ------------------------------------------------------------------
+
+    //std::cout << "prior to numer/sigma construction" << std::endl;
+    // --- Compute sigma = sqrt(eigval) and numerator = |u_i^T b| ---
     std::vector<double> sigma(naux, 0.0);
-    std::vector<double> picard(naux, 0.0);
+    std::vector<double> numer(naux, 0.0);
+    std::vector<double> noabs_numer(naux, 0.0);
     for (int i = 0; i < naux; i++) {
-        sigma[i] = std::sqrt(std::abs(eigval[i]));
+        sigma[i] = std::sqrt(std::abs(eigval_desc[i]));
 
         double dotprod = 0.0;
         for (int P = 0; P < naux; P++)
-            dotprod += metric_flat[P + i * naux] * rhs[P];  // use flat eigenvectors
+            dotprod += metric_desc[P + i * naux] * rhs[P];  // eigenvector i
 
-        picard[i] = std::abs(dotprod) / sigma[i];
+        numer[i] = std::abs(dotprod);
+	noabs_numer[i] = dotprod; 
     }
 
-    rhs.clear();  // free memory
+    std::cout << "prior to descending sort + heuristic picard" << std::endl;
 
-    // --- Find knee of Picard coefficients ---
-    double epsilon_opt = 0.0;
-    for (int i = 0; i < naux - 1; i++) {
-        if (picard[i+1] > picard[i]) {
-            epsilon_opt = sigma[i];
-            break;
-        }
-    }
-    double tol = epsilon_opt * epsilon_opt;
+    // ============================================================
+    // Heuristic sorting requested by user:
+    //   1) sort sigma in descending order
+    //   2) sort numerator |u^T b| in descending order
+    //   3) form picard_i = numer_desc[i] / sigma_desc[i]
+    //
+    // WARNING:
+    // This breaks the original one-to-one correspondence between
+    // sigma_i and its associated numerator |u_i^T b|.
+    // Use as a heuristic diagnostic/cutoff, not as the strict DPC.
+    // ============================================================
 
-    picard.clear();
+    std::vector<double> sigma_desc = sigma;
+    std::vector<double> numer_desc = numer;
+    std::vector<double> noabs_numer_desc = noabs_numer;
 
-    std::vector<double> d(naux, 0.0);
-    for (int i = 0; i < naux; i++) {
-        const double s = sigma[i];
-        if (s > 0.0) {
-            const double s2 = s * s;
-            const double f  = s2 / (s2 + tol);
-            d[i] = f / s;
-        } else {
-            d[i] = 0.0;
-        }
-    }
+    //std::sort(sigma_desc.begin(), sigma_desc.end(), std::greater<double>());
+    //std::sort(numer_desc.begin(), numer_desc.end(), std::greater<double>());
 
-    sigma.clear();  // free memory
-
-    double d_norm = 0.0;
-    for (int i = 0; i < naux; i++) {
-        d_norm += d[i] * d[i];
-    }
-    d_norm = std::sqrt(d_norm);
-    std::cout << "\n d_norm" << std::endl; 
-    std::cout << d_norm << std::endl; 
-
-
-    std::cout << "\n metric:" << std::endl;
-    metric_->zero();
-
-    // count kept modes (truncated dimension)
-    int nkept = 0;
+    std::vector<double> picard_desc(naux, 0.0);
     for (int i = 0; i < naux; ++i) {
-        if (d[i] != 0.0) ++nkept;           // or std::abs(d[i]) > 0.0
+        if (sigma_desc[i] > 0.0)
+            picard_desc[i] = numer_desc[i] / sigma_desc[i];
+        else
+            picard_desc[i] = 0.0;
     }
 
-    const double trunc_ratio = static_cast<double>(nkept) / static_cast<double>(naux);
+    // ============================================================
+    // Methods of determining the cutoff:
+    // (0) DPC inspired criterion:
+    //    choose i where the last (picard_i > sigma_i) 
+    //   
+    // (1) Maximum gap-ratio criterion:
+    //    gap_i = picard_i / picard_{i+1}
+    //    choose i that maximizes gap_i
+    // (2) l-curve 
+    //     plot the log of ||\tilde{x}||_{2} vs ||\tilde{r}||_2 
+    //     determine i based on elbow method    
+    // ============================================================
 
-    // --- Reconstruct inverse metric ---
-    for (int i = 0; i < naux; i++) {
-	const double di = d[i];
-        for (int r = 0; r < naux; r++) {
-            const double U_r_i = metric_flat[r + i * naux];
-            const double scaled = U_r_i * di;
-            for (int c = 0; c < naux; c++) {
-                (*metric_)(r,c) += scaled * metric_flat[c + i * naux];
+    int gap_method = 2;
+    int cutoff_desc = 0;
+    double max_gap_ratio = -1.0;
+    if (gap_method == 1) {
+        //int cutoff_desc = 0;      // descending-order cutoff index
+        //double max_gap_ratio = -1.0;
+        outfile->Printf("\n gap max ratio\n"); 
+        for (int i = 0; i < naux - 1; ++i) {
+            if (picard_desc[i + 1] > 0.0) {
+                double gap = picard_desc[i] / picard_desc[i + 1];
+                if (gap > max_gap_ratio) {
+                    max_gap_ratio = gap;
+                    cutoff_desc = i;
+                }
             }
         }
     }
+    else if (gap_method == 0) {
+	outfile->Printf("\n going into picard > sigma method\n");
+        //int cutoff_desc = 0; 
+	for (int i =  0; i < naux; i++) {
+            if (picard_desc[i] > sigma_desc[i]) {
+                cutoff_desc = i;
+	    }
+	}
+    }
+    else if (gap_method == 2){
+	outfile->Printf("\n l-curve method \n");
+        // ============================================================
+        // MATLAB-style T eigendecomposition L-curve workflow, all inline
+        // Assumes:
+        //   sigma : descending singular values
+        //   U     : eigenvector
+        //   (*metric_)    : matrix
+        //   rhs     : RHS vector
+        // ============================================================
+        //
+        //int m = static_cast<int>((*metric_).size());
+        //outfile->Printf("\n int m %d \n", m);
+	//int n = static_cast<int>((*metric_)(0).size());
+        
+        // ------------------------------------------------------------
+        // Full eigendecomposition solution to build reference B1_0 = A * x_full
+        // ------------------------------------------------------------
+        int rfull = 0;
+        for (int i = 0; i < naux; ++i) {
+            if (sigma_desc[i] > 0.0) rfull++;
+        }
 
-    outfile->Printf("DPC/TR truncation: kept %d / %d modes (ratio = %.6f)\n",
-                nkept, naux, trunc_ratio);
+	//outfile->Printf("\n rfull \n");
+        //---------uTb -> numer_desc -------------
+        //std::vector<double> uty_full(rfull, 0.0);
+        //for (int j = 0; j < rfull; ++j) {
+        //    for (int i = 0; i < m; ++i) {
+        //        uty_full[j] += U[i][j] * y[i];
+        //    }
+        //}
 
-    double norm = 0.0;
-    for (int i = 0; i < naux; i++)
-        for (int j = 0; j < naux; j++)
-            norm += (*metric_)(i,j) * (*metric_)(i,j);
-    norm = std::sqrt(norm);
-    std::cout << norm << std::endl;
+        //---------- uTb/sigma -> picard_desc-----------
+        std::vector<double> zfull(rfull, 0.0);
+        for (int i = 0; i < rfull; ++i) {
+            zfull[i] = noabs_numer_desc[i] / sigma_desc[i];
+	}
 
+        std::vector<double> csvd_full(naux, 0.0);
+        for (int i = 0; i < naux; ++i) {
+            for (int j = 0; j < rfull; ++j) {
+                csvd_full[i] += metric_desc[j + i * naux] * zfull[j];
+            }
+        }
+
+	//outfile->Printf("\n csvd_full \n");
+
+	double full_rsum = 0.0;
+        double norm_rhs = 0.0;  
+	std::vector<double> B1_0(naux, 0.0);
+        for (int i = 0; i < naux; ++i) {
+            for (int j = 0; j < naux; ++j) {
+                B1_0[i] += (*metric_)(i,j) * csvd_full[j];
+            }
+	    //full_rsum += B1_0[i] * B1_0[i];
+            //norm_rhs += rhs[i] * rhs[i];
+        }
+
+	//full_rsum = std::sqrt(full_rsum);
+	//norm_rhs = std::sqrt(norm_rhs);
+	//outfile->Printf("\n B1_0: %d, rhs: %d \n", full_rsum, norm_rhs);
+        // ------------------------------------------------------------
+        // Sweep truncations like MATLAB code
+        // keep first r singular values, for r = naux-1 down to 1
+        // ------------------------------------------------------------
+        std::vector<double> soln_norm_matrix;
+        std::vector<double> res_norm_matrix;
+        std::vector<int>    k_kept_matrix;
+        std::vector<double> sigma_cut_matrix;
+
+        soln_norm_matrix.reserve(naux);
+        res_norm_matrix.reserve(naux);
+        k_kept_matrix.reserve(naux);
+        sigma_cut_matrix.reserve(naux);
+
+        for (int r = naux - 1; r >= 1; --r) {
+
+            // zsvdT1 = ShatT1 \ (UhatT1' * y)
+            std::vector<double> uty(r, 0.0);
+            for (int j = 0; j < r; ++j) {
+                for (int i = 0; i < naux; ++i) {
+                    uty[j] += metric_desc[i + j *naux] * rhs[i];
+                }
+            }
+
+            std::vector<double> z(r, 0.0);
+            for (int i = 0; i < r; ++i) {
+                z[i] = uty[i] / sigma_desc[i];
+            }
+
+            // csvdT1 = VhatT1 * zsvdT1
+            std::vector<double> csvdT1(naux, 0.0);
+            for (int i = 0; i < naux; ++i) {
+                for (int j = 0; j < r; ++j) {
+                    csvdT1[i] += metric_desc[j + i * naux] * z[j];
+                }
+            }
+
+            // solution norm
+            double xsum = 0.0;
+            for (int i = 0; i < naux; ++i) {
+                xsum += csvdT1[i] * csvdT1[i];
+            }
+            double xnorm = std::sqrt(xsum);
+
+            // BprimeSVDT1 = Ak * csvdT1
+            std::vector<double> BprimeSVDT1(naux, 0.0);
+            for (int i = 0; i < naux; ++i) {
+                for (int j = 0; j < naux; ++j) {
+                    BprimeSVDT1[i] += (*metric_)(i,j) * csvdT1[j];
+                }
+            }
+
+            // residual norm: MATLAB-style workflow
+            // res = ||B1_0 - BprimeSVDT1||
+            double rsum = 0.0;
+            for (int i = 0; i < naux; ++i) {
+                double diff = B1_0[i] - BprimeSVDT1[i];
+                rsum += diff * diff;
+            }
+            double rnorm = std::sqrt(rsum);
+
+            soln_norm_matrix.push_back(xnorm);
+            res_norm_matrix.push_back(rnorm);
+            k_kept_matrix.push_back(r);
+            sigma_cut_matrix.push_back(sigma_desc[r - 1]);  // smallest kept sigma
+        }
+
+        // ------------------------------------------------------------
+        // Find L-curve corner by discrete curvature on log-log scale
+        // ------------------------------------------------------------
+        // using cutoff_desc instead of best_idx
+        //int best_idx = 0;
+        double best_curv = -1.0;
+
+        if (soln_norm_matrix.size() >= 3) {
+            for (int k = 1; k < static_cast<int>(soln_norm_matrix.size()) - 1; ++k) {
+
+                double x1 = std::log(res_norm_matrix[k - 1]  + 1.0e-300);
+                double y1 = std::log(soln_norm_matrix[k - 1] + 1.0e-300);
+                double x2 = std::log(res_norm_matrix[k]      + 1.0e-300);
+                double y2 = std::log(soln_norm_matrix[k]     + 1.0e-300);
+                double x3 = std::log(res_norm_matrix[k + 1]  + 1.0e-300);
+                double y3 = std::log(soln_norm_matrix[k + 1] + 1.0e-300);
+
+                double ax = x2 - x1;
+                double ay = y2 - y1;
+                double bx = x3 - x2;
+                double by = y3 - y2;
+                double cx = x3 - x1;
+                double cy = y3 - y1;
+
+                double a = std::sqrt(ax * ax + ay * ay);
+                double b = std::sqrt(bx * bx + by * by);
+                double c = std::sqrt(cx * cx + cy * cy);
+
+                double area2 = std::abs(ax * cy - ay * cx);
+                double curv = 0.0;
+
+                if (a > 0.0 && b > 0.0 && c > 0.0) {
+                    curv = 2.0 * area2 / (a * b * c);
+                }
+
+                if (curv > best_curv) {
+                    best_curv = curv;
+                    cutoff_desc = k;
+                }
+            }
+        }
+
+        int k_opt = k_kept_matrix[cutoff_desc];
+        // don't need this I think, decided at the different method for hard cutoff or tol 
+        //double epsilon_sigma = sigma_cut_matrix[best_idx];
+        double tol = sigma_desc[cutoff_desc] * sigma_desc[cutoff_desc + 1];
+
+        outfile->Printf("\n=== TSVD L-curve analysis ===\n");
+        outfile->Printf("Selected truncation k_opt = %d\n", k_opt);
+        outfile->Printf("Corner sigma_k = %.12e\n", sigma_desc[cutoff_desc]);
+        outfile->Printf("Suggested eigval cutoff tol = sigma_k^2 = %.12e\n", tol);
+        outfile->Printf("Discrete curvature at corner = %.12e\n", best_curv);
+
+        outfile->Printf("\n   idx    k_kept         ||r||               ||x||             sigma_k\n");
+        for (int i = 0; i < static_cast<int>(k_kept_matrix.size()); ++i) {
+            outfile->Printf("%6d %8d   %16.8e   %16.8e   %16.8e\n",
+                            i,
+                            k_kept_matrix[i],
+                            res_norm_matrix[i],
+                            soln_norm_matrix[i],
+                            sigma_cut_matrix[i]);
+        }
+
+        //outfile->Printf("\nNeighborhood around selected corner:\n");
+        //outfile->Printf("   idx    k_kept         ||r||               ||x||             sigma_k\n");
+        //for (int i = std::max(0, cutoff_desc - 2);
+        //     i <= std::min((int)k_kept_matrix.size() - 1, cutoff_desc + 2);
+        //     ++i) {
+        //    outfile->Printf("%6d %8d   %16.8e   %16.8e   %16.8e\n",
+        //                    i,
+        //                    k_kept_matrix[i],
+        //                    res_norm_matrix[i],
+        //                    soln_norm_matrix[i],
+        //                    sigma_cut_matrix[i]);
+        //}
+
+        // ------------------------------------------------------------
+        // Write L-curve data to file
+        // ------------------------------------------------------------
+        //std::ofstream dat("lcurve_data.txt");
+        //dat << std::setprecision(16);
+        //dat << "# idx  k_kept  residual_norm  solution_norm  sigma_k\n";
+        //for (int i = 0; i < static_cast<int>(k_kept_matrix.size()); ++i) {
+        //    dat << i << " "
+        //        << k_kept_matrix[i] << " "
+        //        << res_norm_matrix[i] << " "
+        //        << soln_norm_matrix[i] << " "
+        //        << sigma_cut_matrix[i] << "\n";
+        //}
+        //dat.close();
+
+        //outfile->Printf("\nWrote L-curve data to lcurve_data.txt\n");
+
+        // ------------------------------------------------------------
+        // Write Python plotting script
+        // ------------------------------------------------------------
+       // std::ofstream py("lcurve_plot.py");
+       // py << "import numpy as np\n";
+       // py << "import matplotlib.pyplot as plt\n\n";
+       // py << "data = np.loadtxt('lcurve_data.txt', comments='#')\n";
+       // py << "idx = data[:,0].astype(int)\n";
+       // py << "k_kept = data[:,1].astype(int)\n";
+       // py << "rnorm = data[:,2]\n";
+       // py << "xnorm = data[:,3]\n";
+       // py << "sigma_k = data[:,4]\n\n";
+
+       // py << "cutoff_desc = 0\n";
+       // py << "best_curv = -1.0\n";
+       // py << "for k in range(1, len(rnorm)-1):\n";
+       // py << "    x1 = np.log(rnorm[k-1] + 1.0e-300)\n";
+       // py << "    y1 = np.log(xnorm[k-1] + 1.0e-300)\n";
+       // py << "    x2 = np.log(rnorm[k]   + 1.0e-300)\n";
+       // py << "    y2 = np.log(xnorm[k]   + 1.0e-300)\n";
+       // py << "    x3 = np.log(rnorm[k+1] + 1.0e-300)\n";
+       // py << "    y3 = np.log(xnorm[k+1] + 1.0e-300)\n";
+       // py << "    ax, ay = x2-x1, y2-y1\n";
+       // py << "    bx, by = x3-x2, y3-y2\n";
+       // py << "    cx, cy = x3-x1, y3-y1\n";
+       // py << "    a = np.hypot(ax, ay)\n";
+       // py << "    b = np.hypot(bx, by)\n";
+       // py << "    c = np.hypot(cx, cy)\n";
+       // py << "    area2 = abs(ax*cy - ay*cx)\n";
+       // py << "    curv = 0.0\n";
+       // py << "    if a > 0 and b > 0 and c > 0:\n";
+       // py << "        curv = 2.0 * area2 / (a*b*c)\n";
+       // py << "    if curv > best_curv:\n";
+       // py << "        best_curv = curv\n";
+       // py << "        cutoff_desc = k\n\n";
+
+       // py << "plt.figure(figsize=(7,5))\n";
+       // py << "plt.loglog(rnorm, xnorm, marker='o')\n";
+       // py << "plt.loglog(rnorm[cutoff_desc], xnorm[cutoff_desc], marker='s', markersize=9)\n";
+       // py << "plt.xlabel(r'$||r_k||$')\n";
+       // py << "plt.ylabel(r'$||x_k||$')\n";
+       // py << "plt.title('TSVD L-curve')\n";
+       // py << "plt.annotate(f'k={k_kept[cutoff_desc]}\\nσ={sigma_k[cutoff_desc]:.2e}',\n";
+       // py << "             (rnorm[cutoff_desc], xnorm[cutoff_desc]),\n";
+       // py << "             textcoords='offset points', xytext=(10,10))\n";
+       // py << "plt.grid(True, which='both', ls='--', alpha=0.5)\n";
+       // py << "plt.tight_layout()\n";
+       // py << "plt.savefig('lcurve_plot.png', dpi=300)\n";
+       // py << "plt.show()\n";
+       // py.close();
+
+       // outfile->Printf("Wrote plotting script to lcurve_plot.py\n");
+       // outfile->Printf("Run: python lcurve_plot.py\n");
+    }
+
+    //double epsilon_sigma = sigma_desc[cutoff_desc];
+    double tol = sigma_desc[cutoff_desc] * sigma_desc[cutoff_desc + 1] ;
+
+    // Choose method:
+    //   1 = hard cutoff beyond sigma_desc[cutoff_desc]
+    //   2 = threshold eigenvalues by sigma_desc[cutoff_desc]^2
+    int cutoff_method = 2;
+
+    outfile->Printf("\nHeuristic sorted-numerator Picard analysis:\n");
+    outfile->Printf("  cutoff_method             = %d\n", cutoff_method);
+    outfile->Printf("  cutoff_desc index         = %d\n", cutoff_desc);
+    //outfile->Printf("  picard[i]                 = %.12e\n", picard_desc[cutoff_desc]);
+    //outfile->Printf("  picard[i+1]               = %.12e\n", picard_desc[cutoff_desc + 1]);
+    //outfile->Printf("  max gap ratio             = %.12e\n", max_gap_ratio);
+    //outfile->Printf("  sigma_cut                 = %.12e\n", sigma_desc[cutoff_desc]);
+    outfile->Printf("  sigma_cut + 1             = %.12e\n", sigma_desc[cutoff_desc + 1]);
+    //outfile->Printf("  sigma_cut^2 (= tol)       = %.12e\n", tol);
+
+    //outfile->Printf("\nTop few heuristic sorted entries around cutoff:\n");
+    //outfile->Printf("  idx         numer_desc            sigma_desc            picard_desc\n");
+    //for (int i = std::max(0, cutoff_desc - 3); i <= std::min(naux - 1, cutoff_desc + 3); ++i) {
+    //    outfile->Printf("%5d   %18.10e   %18.10e   %18.10e\n",
+    //                    i, numer_desc[i], sigma_desc[i], picard_desc[i]);
+    //}
+
+    // ============================================================
+    // Write full sigma / numer / picard table for plotting
+    // ============================================================
+    //std::ofstream picard_out("picard_data_sorted.txt");
+    //if (picard_out) {
+    //    picard_out << "# idx sigma_desc numer_desc picard_desc\n";
+    //    picard_out << std::setprecision(16);
+    //    for (int i = 0; i < naux; ++i) {
+    //        picard_out << i << " "
+    //                   << sigma_desc[i] << " "
+    //                   << numer_desc[i] << " "
+    //                   << picard_desc[i] << "\n";
+    //    }
+    //    picard_out.close();
+    //} else {
+    //    outfile->Printf("Warning: could not open picard_data_sorted.txt for writing\n");
+    //}
+    //std::cout << "prior to inverse metric" << std::endl;
+    // --- Reconstruct inverse metric ---
+    for (int r = 0; r < naux; r++)
+        for (int c = 0; c < naux; c++)
+            (*metric_)(r, c) = 0.0;
+
+    int nkept = 0;
+
+    if (cutoff_method == 1) {
+        // --------------------------------------------------------
+        // METHOD 1:
+        // Hard cutoff by descending sigma index.
+        //
+        // Since eigval is ascending, keeping the largest (cutoff_desc+1)
+        // sigma values means keeping the largest (cutoff_desc+1)
+        // eigenvalues. In ascending eigval indexing, that corresponds to:
+        //
+        //     i >= naux - 1 - cutoff_desc
+        // --------------------------------------------------------
+        int keep_from_asc = naux - 1 - cutoff_desc;
+
+        for (int i = 0; i < naux; ++i) {
+            if (i >= keep_from_asc) ++nkept;
+        }
+
+        const double trunc_ratio =
+            static_cast<double>(nkept) / static_cast<double>(naux);
+      
+        for (int i = 0; i < naux; i++) {
+            if (i >= keep_from_asc) {
+                if (eigval[i] > 0.0) {
+                    double inv_sqrt = 1.0 / std::sqrt(eigval[i]);
+                    for (int r = 0; r < naux; r++) {
+                        for (int c = 0; c < naux; c++) {
+                            (*metric_)(r, c) += metric_flat[r + i * naux] *
+                                                inv_sqrt *
+                                                metric_flat[c + i * naux];
+                        }
+                    }
+                }
+            }
+        }
+
+        outfile->Printf("\nDPC Method 1 (hard cutoff beyond sigma_desc[%d]): kept %d / %d modes (ratio = %.6f)\n",
+                        cutoff_desc, nkept, naux, trunc_ratio);
+
+    } else if (cutoff_method == 2) {
+        // --------------------------------------------------------
+        // METHOD 2:
+        // Use tol = sigma_desc[cutoff_desc]^2, then keep eigval >= tol
+        // --------------------------------------------------------
+        for (int i = 0; i < naux; ++i) {
+            if (eigval[i] >= tol) ++nkept;
+	    outfile->Printf("\n count = %d, %.12e\n", i, eigval[i]);  
+        }
+
+        const double trunc_ratio =
+            static_cast<double>(nkept) / static_cast<double>(naux);
+
+        for (int i = 0; i < naux; i++) {
+            if (eigval[i] >= tol) {
+                double inv_sqrt = 1.0 / std::sqrt(eigval[i]);
+                for (int r = 0; r < naux; r++) {
+                    for (int c = 0; c < naux; c++) {
+                        (*metric_)(r, c) += metric_flat[r + i * naux] *
+                                            inv_sqrt *
+                                            metric_flat[c + i * naux];
+                    }
+                }
+            }
+        }
+
+        outfile->Printf("\nDPC Method 2 (threshold by sigma_desc[%d]^2): kept %d / %d modes (ratio = %.6f)\n",
+                        cutoff_desc, nkept, naux, trunc_ratio);
+    } else {
+        throw std::runtime_error("Invalid cutoff_method: choose 1 or 2");
+    }
+
+    picard_desc.clear();
+    numer_desc.clear();
+    sigma_desc.clear();
+    numer.clear();
+    sigma.clear();
+
+    metric_flat.clear();
+    eigval.clear();
+
+    metric_->set_name("SO Basis Fitting Inverse (DPC)");
+    }
+  
+    /// ---------------- l curve method --------------------------
+    //std::cout << "prior to T_flat" << std::endl;
+    //// --- Flatten metric into contiguous vector for diagonalization ---
+    //std::vector<double> metric_flat(naux * naux, 0.0);
+    //for (int i = 0; i < naux; i++)
+    //    for (int j = 0; j < naux; j++)
+    //        metric_flat[i * naux + j] = (*metric_)(i,j);
+    //
+    //std::cout << "prior to diagonalize" << std::endl;
+    //// --- Diagonalize metric (C_DSYEV requires contiguous memory) ---
+    //std::vector<double> eigval(naux, 0.0);
+    //int lwork = naux * 3;
+    //std::vector<double> work(lwork, 0.0);
+    //
+    //int stat = C_DSYEV('v', 'u', naux, metric_flat.data(), naux, eigval.data(), work.data(), lwork);
+    //if (stat != 0)
+    //    throw std::runtime_error("C_DSYEV failed to diagonalize metric");
+    //
+    //work.clear();  // free workspace
+    //
+    //std::cout << "prior to picard_coef" << std::endl;
+    //// --- Compute singular values and |u_i^T b| ---
+    //std::vector<double> sigma(naux, 0.0);
+    //std::vector<double> numer(naux, 0.0);
+    //std::vector<double> picard(naux, 0.0);
+    //
+    //for (int i = 0; i < naux; i++) {
+    //    sigma[i] = std::sqrt(std::abs(eigval[i]));
+    //
+    //    double dotprod = 0.0;
+    //    for (int P = 0; P < naux; P++)
+    //        dotprod += metric_flat[P + i * naux] * rhs[P];  // eigenvector i
+    //
+    //    numer[i]  = std::abs(dotprod);
+    //    picard[i] = (sigma[i] > 0.0 ? numer[i] / sigma[i] : 0.0);
+    //}
+    //
+    //rhs.clear();  // free memory
+    //
+    //std::cout << "prior to determining eps_opt" << std::endl;
+    //
+    //// ------------------------------------------------------------------
+    //// --- L-curve construction using descending singular values order ---
+    //// C_DSYEV gives ascending eigvals, so largest sigma is at naux-1.
+    //// For each k = 1..naux:
+    ////   ||x_k||^2 = sum_{kept modes} (numer/sigma)^2
+    ////   ||r_k||^2 = sum_{discarded modes} numer^2
+    //// ------------------------------------------------------------------
+    //std::vector<double> xnorm(naux, 0.0);
+    //std::vector<double> rnorm(naux, 0.0);
+    //
+    //double xsum = 0.0;
+    //
+    //// residual for k=1 starts as sum over all but largest mode, etc.
+    //for (int k = 0; k < naux; ++k) {
+    //    int idx = naux - 1 - k;  // descending-order index
+    //
+    //    if (sigma[idx] > 0.0)
+    //        xsum += (numer[idx] / sigma[idx]) * (numer[idx] / sigma[idx]);
+    //    xnorm[k] = std::sqrt(xsum);
+    //
+    //    double rsum = 0.0;
+    //    for (int j = 0; j < idx; ++j)  // smaller singular values not yet kept
+    //        rsum += numer[j] * numer[j];
+    //    rnorm[k] = std::sqrt(rsum);
+    //}
+    //
+    //// --- Find corner of log-scale L-curve with simple discrete curvature ---
+    //int k_opt = 1;   // 1-based truncation index
+    //double best_curv = -1.0;
+    //
+    //for (int k = 1; k < naux - 1; ++k) {
+    //    // points: (log ||r_k||, log ||x_k||)
+    //    double x1 = std::log(rnorm[k - 1] + 1.0e-300);
+    //    double y1 = std::log(xnorm[k - 1] + 1.0e-300);
+    //    double x2 = std::log(rnorm[k]     + 1.0e-300);
+    //    double y2 = std::log(xnorm[k]     + 1.0e-300);
+    //    double x3 = std::log(rnorm[k + 1] + 1.0e-300);
+    //    double y3 = std::log(xnorm[k + 1] + 1.0e-300);
+    //
+    //    double ax = x2 - x1, ay = y2 - y1;
+    //    double bx = x3 - x2, by = y3 - y2;
+    //    double cx = x3 - x1, cy = y3 - y1;
+    //
+    //    double a = std::sqrt(ax * ax + ay * ay);
+    //    double b = std::sqrt(bx * bx + by * by);
+    //    double c = std::sqrt(cx * cx + cy * cy);
+    //
+    //    double area2 = std::abs(ax * cy - ay * cx);  // 2 * triangle area
+    //    double curv = 0.0;
+    //    if (a > 0.0 && b > 0.0 && c > 0.0)
+    //        curv = 2.0 * area2 / (a * b * c);
+    //
+    //    if (curv > best_curv) {
+    //        best_curv = curv;
+    //        k_opt = k + 1;  // convert to 1-based k
+    //    }
+    //}
+    //
+    //// --- map k_opt back to sigma_k in descending order ---
+    //int idx_opt = naux - k_opt;
+    //double epsilon_sigma = sigma[idx_opt];
+    //double tol = epsilon_sigma * epsilon_sigma;
+    //
+    //outfile->Printf("L-curve selected k = %d\n", k_opt);
+    //outfile->Printf("Corresponding sigma_k = %.12e\n", epsilon_sigma);
+    //outfile->Printf("Using eigval cutoff tol = sigma_k^2 = %.12e\n", tol);
+    //
+    //// Optional: print a few nearby L-curve points
+    //outfile->Printf("\n   k           ||r_k||            ||x_k||            sigma_k\n");
+    //for (int kk = std::max(1, k_opt - 2); kk <= std::min(naux, k_opt + 2); ++kk) {
+    //    int id = naux - kk;
+    //    outfile->Printf("%4d   %16.8e   %16.8e   %16.8e\n",
+    //                    kk, rnorm[kk - 1], xnorm[kk - 1], sigma[id]);
+    //}
+    //
+    //picard.clear();
+    //xnorm.clear();
+    //rnorm.clear();
+    //numer.clear();
+    //sigma.clear();
+    //
+    //std::cout << "prior to inverse metric" << std::endl;
+    //// --- Reconstruct inverse metric ---
+    //for (int r = 0; r < naux; r++)
+    //    for (int c = 0; c < naux; c++)
+    //        (*metric_)(r,c) = 0.0;
+    //
+    //// count kept modes using tol
+    //int nkept = 0;
+    //for (int i = 0; i < naux; ++i) {
+    //    if (eigval[i] > tol) ++nkept;
+    //}
+    //
+    //const double trunc_ratio = static_cast<double>(nkept) / static_cast<double>(naux);
+    //
     //for (int i = 0; i < naux; i++) {
     //    if (eigval[i] > tol) {
     //        double inv_sqrt = 1.0 / std::sqrt(eigval[i]);
@@ -1116,13 +1600,232 @@ void FittingMetric::form_eig_inverse_TR() {
     //        }
     //    }
     //}
+    //
+    //outfile->Printf("DPC/L-curve truncation: kept %d / %d modes (ratio = %.6f)\n",
+    //                nkept, naux, trunc_ratio);
+    //
+    //metric_flat.clear();
+    //eigval.clear();
+    //
+    //metric_->set_name("SO Basis Fitting Inverse (DPC)");
+    //}
+    ///// ------------- l curve method above ----------------
     
-    metric_flat.clear();
-    eigval.clear();
-
-    metric_->set_name("SO Basis Fitting Inverse (TR)");
-
-}	
+    void FittingMetric::form_eig_inverse_TR() {
+        is_inverted_ = true;
+        algorithm_ = "TR"; 
+        TR_ = true;
+    
+    
+        outfile->Printf("DPC-weighted filter for TR \n");
+        form_fitting_metric();
+    
+        auto zero = BasisSet::zero_ao_basis_set();
+        auto basis = reference_wavefunction_->basisset();
+        auto eri_fact = std::make_shared<IntegralFactory>(aux_, zero, basis, basis);
+        auto eri = std::shared_ptr<TwoBodyAOInt>(eri_fact->eri());
+    
+        SharedMatrix D_ao = reference_wavefunction_->Da();
+        if (!D_ao) {
+            throw std::runtime_error("D_ao is null");
+        }
+    
+        int naux = aux_->nbf();
+        int nbf  = basis->nbf();
+    
+        if (D_ao->nrow() != nbf || D_ao->ncol() != nbf) {
+            throw std::runtime_error("D_ao dimension mismatch");
+        }
+    
+        std::vector<double> rhs(naux, 0.0);
+    
+        // zero basis info
+        int n0 = zero->shell(0).nfunction();
+        if (n0 <= 0) {
+            throw std::runtime_error("Zero basis has invalid nfunction");
+        }
+    
+        for (int P = 0; P < aux_->nshell(); P++) {
+    
+            const auto& Pshell = aux_->shell(P);
+            int np = Pshell.nfunction();
+            int pstart = Pshell.function_index();
+    
+            if (pstart < 0 || pstart + np > naux) {
+                throw std::runtime_error("Aux shell index out of bounds");
+            }
+    
+            for (int M = 0; M < basis->nshell(); M++) {
+    
+                const auto& Mshell = basis->shell(M);
+                int nm = Mshell.nfunction();
+                int mstart = Mshell.function_index();
+    
+                if (mstart < 0 || mstart + nm > nbf) {
+                    throw std::runtime_error("Basis shell M index out of bounds");
+    	    }
+    
+                for (int N = 0; N < basis->nshell(); N++) {
+    
+                    const auto& Nshell = basis->shell(N);
+                    int nn = Nshell.nfunction();
+                    int nstart = Nshell.function_index();
+    
+                    if (nstart < 0 || nstart + nn > nbf) {
+                        throw std::runtime_error("Basis shell N index out of bounds");
+                    }
+    
+                    // Compute (P | 0 M N)
+                    eri->compute_shell(P, 0, M, N);
+                    const double* buffer = eri->buffer();
+    
+                    if (!buffer) {
+                        throw std::runtime_error("ERI buffer is null");
+                    }
+    
+                    int expected_size = np * n0 * nm * nn;
+                    int index = 0;
+    
+                    for (int p = 0; p < np; p++) {
+                        for (int q = 0; q < n0; q++) {
+                            for (int m = 0; m < nm; m++) {
+                                for (int n = 0; n < nn; n++) {
+    
+                                    int Pidx = p + pstart;
+                                    int midx = m + mstart;
+                                    int nidx = n + nstart;
+    
+                                    rhs[Pidx] += buffer[index]
+                                                 * (*D_ao)(midx, nidx);
+                                    index++;
+                                }
+                            }
+                        }
+                    }
+    
+                    if (index != expected_size) {
+                        throw std::runtime_error("ERI buffer index mismatch");
+                    }
+                }
+            }
+        }
+    
+        // --- Flatten metric into contiguous vector for diagonalization ---
+        std::vector<double> metric_flat(naux * naux, 0.0);
+        for (int i = 0; i < naux; i++)
+            for (int j = 0; j < naux; j++)
+                metric_flat[i * naux + j] = (*metric_)(i,j);
+    
+        // --- Diagonalize metric (C_DSYEV requires contiguous memory) ---
+        std::vector<double> eigval(naux, 0.0);
+        int lwork = naux * 3;
+        std::vector<double> work(lwork, 0.0);
+    
+        int stat = C_DSYEV('v', 'u', naux, metric_flat.data(), naux, eigval.data(), work.data(), lwork);
+        if (stat != 0)
+            throw std::runtime_error("C_DSYEV failed to diagonalize metric");
+    
+        work.clear();  // free workspace
+    
+        // --- Compute Picard coefficients ---
+        std::vector<double> sigma(naux, 0.0);
+        std::vector<double> picard(naux, 0.0);
+        for (int i = 0; i < naux; i++) {
+            sigma[i] = std::sqrt(std::abs(eigval[i]));
+    
+            double dotprod = 0.0;
+            for (int P = 0; P < naux; P++)
+                dotprod += metric_flat[P + i * naux] * rhs[P];  // use flat eigenvectors
+    
+            picard[i] = std::abs(dotprod) / sigma[i];
+        }
+    
+        rhs.clear();  // free memory
+    
+        // --- Find knee of Picard coefficients ---
+        double epsilon_opt = 0.0;
+        for (int i = 0; i < naux - 1; i++) {
+            if (picard[i+1] > picard[i]) {
+                epsilon_opt = sigma[i];
+                break;
+            }
+        }
+        double tol = epsilon_opt * epsilon_opt;
+    
+        picard.clear();
+    
+        std::vector<double> d(naux, 0.0);
+        for (int i = 0; i < naux; i++) {
+            const double s = sigma[i];
+            if (s > 0.0) {
+                const double s2 = s * s;
+                const double f  = s2 / (s2 + tol);
+                d[i] = f / s;
+            } else {
+                d[i] = 0.0;
+            }
+        }
+    
+        sigma.clear();  // free memory
+    
+        double d_norm = 0.0;
+        for (int i = 0; i < naux; i++) {
+            d_norm += d[i] * d[i];
+        }
+        d_norm = std::sqrt(d_norm);
+        std::cout << "\n d_norm" << std::endl; 
+        std::cout << d_norm << std::endl; 
+    
+    
+        std::cout << "\n metric:" << std::endl;
+        metric_->zero();
+    
+        // count kept modes (truncated dimension)
+        int nkept = 0;
+        for (int i = 0; i < naux; ++i) {
+            if (d[i] != 0.0) ++nkept;           // or std::abs(d[i]) > 0.0
+        }
+    
+        const double trunc_ratio = static_cast<double>(nkept) / static_cast<double>(naux);
+    
+        // --- Reconstruct inverse metric ---
+        for (int i = 0; i < naux; i++) {
+    	const double di = d[i];
+            for (int r = 0; r < naux; r++) {
+                const double U_r_i = metric_flat[r + i * naux];
+                const double scaled = U_r_i * di;
+                for (int c = 0; c < naux; c++) {
+                    (*metric_)(r,c) += scaled * metric_flat[c + i * naux];
+                }
+            }
+        }
+    
+        outfile->Printf("DPC/TR truncation: kept %d / %d modes (ratio = %.6f)\n",
+                    nkept, naux, trunc_ratio);
+    
+        double norm = 0.0;
+        for (int i = 0; i < naux; i++)
+            for (int j = 0; j < naux; j++)
+                norm += (*metric_)(i,j) * (*metric_)(i,j);
+        norm = std::sqrt(norm);
+        std::cout << norm << std::endl;
+    
+        //for (int i = 0; i < naux; i++) {
+        //    if (eigval[i] > tol) {
+        //        double inv_sqrt = 1.0 / std::sqrt(eigval[i]);
+        //        for (int r = 0; r < naux; r++) {
+        //            for (int c = 0; c < naux; c++) {
+        //                (*metric_)(r,c) += metric_flat[r + i*naux] * inv_sqrt * metric_flat[c + i*naux];
+        //            }
+        //        }
+        //    }
+        //}
+        
+        metric_flat.clear();
+        eigval.clear();
+    
+        metric_->set_name("SO Basis Fitting Inverse (TR)");
+    }	
 void FittingMetric::form_full_eig_inverse(double tol) {
     is_inverted_ = true;
     algorithm_ = "EIG";
