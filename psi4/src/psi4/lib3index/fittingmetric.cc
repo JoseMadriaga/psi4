@@ -967,6 +967,7 @@ void FittingMetric::form_eig_inverse_DPC() {
     std::vector<double> sigma(naux, 0.0);
     std::vector<double> numer(naux, 0.0);
     std::vector<double> noabs_numer(naux, 0.0);
+
     for (int i = 0; i < naux; i++) {
         sigma[i] = std::sqrt(std::abs(eigval_desc[i]));
 
@@ -978,7 +979,7 @@ void FittingMetric::form_eig_inverse_DPC() {
 	noabs_numer[i] = dotprod; 
     }
 
-    std::cout << "prior to descending sort + heuristic picard" << std::endl;
+    //std::cout << "prior to descending sort + heuristic picard" << std::endl;
 
     // ============================================================
     // Heuristic sorting requested by user:
@@ -992,20 +993,21 @@ void FittingMetric::form_eig_inverse_DPC() {
     // Use as a heuristic diagnostic/cutoff, not as the strict DPC.
     // ============================================================
 
-    std::vector<double> sigma_desc = sigma;
-    std::vector<double> numer_desc = numer;
-    std::vector<double> noabs_numer_desc = noabs_numer;
+    // ------- redundant code -----------------
+    //std::vector<double> sigma_desc = sigma;
+    //std::vector<double> numer_desc = numer;
+    //std::vector<double> noabs_numer_desc = noabs_numer;
 
     //std::sort(sigma_desc.begin(), sigma_desc.end(), std::greater<double>());
     //std::sort(numer_desc.begin(), numer_desc.end(), std::greater<double>());
 
-    std::vector<double> picard_desc(naux, 0.0);
-    for (int i = 0; i < naux; ++i) {
-        if (sigma_desc[i] > 0.0)
-            picard_desc[i] = numer_desc[i] / sigma_desc[i];
-        else
-            picard_desc[i] = 0.0;
-    }
+    //std::vector<double> picard_desc(naux, 0.0);
+    //for (int i = 0; i < naux; ++i) {
+    //    if (sigma[i] > 0.0)
+    //        picard_desc[i] = numer[i] / sigma[i];
+    //    else
+    //        picard_desc[i] = 0.0;
+    //}
 
     // ============================================================
     // Methods of determining the cutoff:
@@ -1022,11 +1024,21 @@ void FittingMetric::form_eig_inverse_DPC() {
 
     int gap_method = 2;
     int cutoff_desc = 0;
+    double tol = 0;
     double max_gap_ratio = -1.0;
+    double epsilon_sigma = 0;
     if (gap_method == 1) {
         //int cutoff_desc = 0;      // descending-order cutoff index
         //double max_gap_ratio = -1.0;
-        outfile->Printf("\n gap max ratio\n"); 
+        //outfile->Printf("\n gap max ratio\n");
+        std::vector<double> picard_desc(naux, 0.0);
+        for (int i = 0; i < naux; ++i) {
+            if (sigma[i] > 0.0)
+                picard_desc[i] = numer[i] / sigma[i];
+            else
+                picard_desc[i] = 0.0;
+        }
+
         for (int i = 0; i < naux - 1; ++i) {
             if (picard_desc[i + 1] > 0.0) {
                 double gap = picard_desc[i] / picard_desc[i + 1];
@@ -1040,8 +1052,16 @@ void FittingMetric::form_eig_inverse_DPC() {
     else if (gap_method == 0) {
 	outfile->Printf("\n going into picard > sigma method\n");
         //int cutoff_desc = 0; 
+        std::vector<double> picard_desc(naux, 0.0);
+        for (int i = 0; i < naux; ++i) {
+            if (sigma[i] > 0.0)
+                picard_desc[i] = numer[i] / sigma[i];
+            else
+                picard_desc[i] = 0.0;
+        }
+
 	for (int i =  0; i < naux; i++) {
-            if (picard_desc[i] > sigma_desc[i]) {
+            if (picard_desc[i] > sigma[i]) {
                 cutoff_desc = i;
 	    }
 	}
@@ -1066,7 +1086,7 @@ void FittingMetric::form_eig_inverse_DPC() {
         // ------------------------------------------------------------
         int rfull = 0;
         for (int i = 0; i < naux; ++i) {
-            if (sigma_desc[i] > 0.0) rfull++;
+            if (sigma[i] > 0.0) rfull++;
         }
 
 	//outfile->Printf("\n rfull \n");
@@ -1081,7 +1101,7 @@ void FittingMetric::form_eig_inverse_DPC() {
         //---------- uTb/sigma -> picard_desc-----------
         std::vector<double> zfull(rfull, 0.0);
         for (int i = 0; i < rfull; ++i) {
-            zfull[i] = noabs_numer_desc[i] / sigma_desc[i];
+            zfull[i] = noabs_numer[i] / sigma[i];
 	}
 
         std::vector<double> csvd_full(naux, 0.0);
@@ -1093,8 +1113,8 @@ void FittingMetric::form_eig_inverse_DPC() {
 
 	//outfile->Printf("\n csvd_full \n");
 
-	double full_rsum = 0.0;
-        double norm_rhs = 0.0;  
+	//double full_rsum = 0.0;
+        //double norm_rhs = 0.0;  
 	std::vector<double> B1_0(naux, 0.0);
         for (int i = 0; i < naux; ++i) {
             for (int j = 0; j < naux; ++j) {
@@ -1133,7 +1153,7 @@ void FittingMetric::form_eig_inverse_DPC() {
 
             std::vector<double> z(r, 0.0);
             for (int i = 0; i < r; ++i) {
-                z[i] = uty[i] / sigma_desc[i];
+                z[i] = uty[i] / sigma[i];
             }
 
             // csvdT1 = VhatT1 * zsvdT1
@@ -1171,7 +1191,7 @@ void FittingMetric::form_eig_inverse_DPC() {
             soln_norm_matrix.push_back(xnorm);
             res_norm_matrix.push_back(rnorm);
             k_kept_matrix.push_back(r);
-            sigma_cut_matrix.push_back(sigma_desc[r - 1]);  // smallest kept sigma
+            sigma_cut_matrix.push_back(sigma[r - 1]);  // smallest kept sigma
         }
 
         // ------------------------------------------------------------
@@ -1218,24 +1238,25 @@ void FittingMetric::form_eig_inverse_DPC() {
 
         int k_opt = k_kept_matrix[cutoff_desc];
         // don't need this I think, decided at the different method for hard cutoff or tol 
-        //double epsilon_sigma = sigma_cut_matrix[best_idx];
-        double tol = sigma_desc[cutoff_desc] * sigma_desc[cutoff_desc + 1];
+        epsilon_sigma = sigma_cut_matrix[cutoff_desc];
+        //double tol = sigma[cutoff_desc] * sigma[cutoff_desc + 1];
 
         outfile->Printf("\n=== TSVD L-curve analysis ===\n");
+	outfile->Printf("Cutoff desc - %d\n", cutoff_desc);
         outfile->Printf("Selected truncation k_opt = %d\n", k_opt);
-        outfile->Printf("Corner sigma_k = %.12e\n", sigma_desc[cutoff_desc]);
-        outfile->Printf("Suggested eigval cutoff tol = sigma_k^2 = %.12e\n", tol);
-        outfile->Printf("Discrete curvature at corner = %.12e\n", best_curv);
+        outfile->Printf("Corner sigma_k = %.12e\n", epsilon_sigma);
+        //outfile->Printf("Suggested eigval cutoff tol = sigma_k^2 = %.12e\n", tol);
+        //outfile->Printf("Discrete curvature at corner = %.12e\n", best_curv);
 
-        outfile->Printf("\n   idx    k_kept         ||r||               ||x||             sigma_k\n");
-        for (int i = 0; i < static_cast<int>(k_kept_matrix.size()); ++i) {
-            outfile->Printf("%6d %8d   %16.8e   %16.8e   %16.8e\n",
-                            i,
-                            k_kept_matrix[i],
-                            res_norm_matrix[i],
-                            soln_norm_matrix[i],
-                            sigma_cut_matrix[i]);
-        }
+        //outfile->Printf("\n   idx    k_kept         ||r||               ||x||             sigma_k\n");
+        //for (int i = 0; i < static_cast<int>(k_kept_matrix.size()); ++i) {
+        //    outfile->Printf("%6d %8d   %16.8e   %16.8e   %16.8e\n",
+        //                    i,
+        //                    k_kept_matrix[i],
+        //                    res_norm_matrix[i],
+        //                    soln_norm_matrix[i],
+        //                    sigma_cut_matrix[i]);
+        //}
 
         //outfile->Printf("\nNeighborhood around selected corner:\n");
         //outfile->Printf("   idx    k_kept         ||r||               ||x||             sigma_k\n");
@@ -1323,7 +1344,7 @@ void FittingMetric::form_eig_inverse_DPC() {
     }
 
     //double epsilon_sigma = sigma_desc[cutoff_desc];
-    double tol = sigma_desc[cutoff_desc] * sigma_desc[cutoff_desc + 1] ;
+    //double tol = sigma[cutoff_desc] * sigma[cutoff_desc + 1] ;
 
     // Choose method:
     //   1 = hard cutoff beyond sigma_desc[cutoff_desc]
@@ -1332,12 +1353,12 @@ void FittingMetric::form_eig_inverse_DPC() {
 
     outfile->Printf("\nHeuristic sorted-numerator Picard analysis:\n");
     outfile->Printf("  cutoff_method             = %d\n", cutoff_method);
-    outfile->Printf("  cutoff_desc index         = %d\n", cutoff_desc);
+    //outfile->Printf("  cutoff_desc index         = %d\n", cutoff_desc);
     //outfile->Printf("  picard[i]                 = %.12e\n", picard_desc[cutoff_desc]);
     //outfile->Printf("  picard[i+1]               = %.12e\n", picard_desc[cutoff_desc + 1]);
     //outfile->Printf("  max gap ratio             = %.12e\n", max_gap_ratio);
     //outfile->Printf("  sigma_cut                 = %.12e\n", sigma_desc[cutoff_desc]);
-    outfile->Printf("  sigma_cut + 1             = %.12e\n", sigma_desc[cutoff_desc + 1]);
+   // outfile->Printf("  sigma_cut + 1             = %.12e\n", sigma[cutoff_desc + 1]);
     //outfile->Printf("  sigma_cut^2 (= tol)       = %.12e\n", tol);
 
     //outfile->Printf("\nTop few heuristic sorted entries around cutoff:\n");
@@ -1415,6 +1436,9 @@ void FittingMetric::form_eig_inverse_DPC() {
         // METHOD 2:
         // Use tol = sigma_desc[cutoff_desc]^2, then keep eigval >= tol
         // --------------------------------------------------------
+        outfile->Printf("n epsilon_sigma = %.12e\n", epsilon_sigma);
+	double tol = epsilon_sigma * epsilon_sigma;
+        outfile->Printf("\n tol = %.12e\n", tol);	
         for (int i = 0; i < naux; ++i) {
             if (eigval[i] >= tol) ++nkept;
 	    outfile->Printf("\n count = %d, %.12e\n", i, eigval[i]);  
@@ -1442,9 +1466,9 @@ void FittingMetric::form_eig_inverse_DPC() {
         throw std::runtime_error("Invalid cutoff_method: choose 1 or 2");
     }
 
-    picard_desc.clear();
-    numer_desc.clear();
-    sigma_desc.clear();
+    //picard_desc.clear();
+    //numer_desc.clear();
+    //sigma_desc.clear();
     numer.clear();
     sigma.clear();
 
