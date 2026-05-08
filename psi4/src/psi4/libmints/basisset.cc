@@ -158,43 +158,167 @@ void BasisSet::initialize_singletons() {
 }
 
 void BasisSet::apply_hermite_normalization() {
-   outfile->Printf("starting normalization\n"); 	
+    outfile->Printf("\napply_hermite_normalization\n");
+    outfile->Printf("starting normalization\n");
+
     for (int sh = 0; sh < n_shells_; ++sh) {
-	outfile->Printf("first loop", sh);    
+        outfile->Printf("\nfirst loop, sh = %d\n", sh);
+
         auto &p4shell = shells_[sh];
         auto &l2shell = l2_shells_[sh];
+
         assert(l2shell.ncontr() == 1);
 
         int L = p4shell.am();
-	outfile->Printf("offset \n");
-        int offset = std::distance((const double*)&ucoefficients_, p4shell.coefs());
-        for(int j = 0; j < p4shell.nprimitive(); j++) {
-            outfile->Printf("second loop \n");
+
+        outfile->Printf("L = %d\n", L);
+        outfile->Printf("nprimitive = %d\n", p4shell.nprimitive());
+
+        /*
+         * IMPORTANT:
+         * If ucoefficients_ is a std::vector<double>, use .data().
+         * Do NOT use (const double*)&ucoefficients_.
+         */
+        ptrdiff_t offset = p4shell.coefs() - ucoefficients_.data();
+
+        outfile->Printf("offset = %ld\n", static_cast<long>(offset));
+        outfile->Printf("ucoefficients size = %zu\n", ucoefficients_.size());
+
+        assert(offset >= 0);
+        assert(offset + p4shell.nprimitive() <=
+               static_cast<ptrdiff_t>(ucoefficients_.size()));
+
+        assert(static_cast<size_t>(p4shell.nprimitive()) <=
+               l2shell.contr[0].coeff.size());
+
+        for (int j = 0; j < p4shell.nprimitive(); j++) {
+            outfile->Printf("\nsecond loop, primitive j = %d\n", j);
+
             double ex = p4shell.exp(j);
             double coef = p4shell.original_coef(j);
-            double factor = sqrt(2.0) * pow(M_PI/ex, 2.5) * pow(fac[L], 2) / pow(4.0*ex, L);
-            /* Find the normalization for the x^Ly^0z^0 term S(0,0,0), P(1,0,0) and D(2,0,0) */
-            double norm = 0;
-	    outfile->Printf("going to third loop \n");
-            for(int ix=0; ix<=L/2; ix++) {
-                for(int jx=0; jx<=L/2; jx++) {
-		    outfile->Printf("doing denom \n");
-                    int denom = fac[ix] * fac[jx] * fac[L-2*ix] * fac[L-2*jx] * (2*(L-ix-jx)+1);
-                    norm = norm + pow(-1.0, ix+jx) * df[2*(L-ix-jx)] / denom;
+
+            outfile->Printf("ex   = %20.12e\n", ex);
+            outfile->Printf("coef = %20.12e\n", coef);
+
+            double factor =
+                sqrt(2.0)
+                * pow(M_PI / ex, 2.5)
+                * pow(fac[L], 2)
+                / pow(4.0 * ex, L);
+
+            outfile->Printf("factor = %20.12e\n", factor);
+
+            /*
+             * Find the normalization for the x^L y^0 z^0 term:
+             * S: L = 0
+             * P: L = 1
+             * D: L = 2
+             * etc.
+             */
+            double norm_sum = 0.0;
+
+            outfile->Printf("going to third loop\n");
+
+            for (int ix = 0; ix <= L / 2; ix++) {
+                for (int jx = 0; jx <= L / 2; jx++) {
+                    outfile->Printf("doing denom: ix = %d, jx = %d\n", ix, jx);
+
+                    int denom =
+                        fac[ix]
+                        * fac[jx]
+                        * fac[L - 2 * ix]
+                        * fac[L - 2 * jx]
+                        * (2 * (L - ix - jx) + 1);
+
+                    outfile->Printf("denom = %d\n", denom);
+
+                    double term =
+                        pow(-1.0, ix + jx)
+                        * df[2 * (L - ix - jx)]
+                        / static_cast<double>(denom);
+
+                    outfile->Printf("term = %20.12e\n", term);
+
+                    norm_sum += term;
                 }
             }
-	    outfile->Printf("going to norm it now \n");
-            norm = 1.0 / sqrt(norm*factor);
-	    outfile->Printf("going to ucoef it now \n");
-	    outfile->Printf("coef = %d", coef);
-	    outfile->Printf("norm = %d", norm);
-            outfile->Printf("ucoef = %d", ucoefficients_[j+offset]);
-	    ucoefficients_[j+offset] = coef * norm;
-	    outfile->Printf("going to l3shell it now \n");
+
+            outfile->Printf("norm_sum before factor = %20.12e\n", norm_sum);
+
+            double norm_arg = norm_sum * factor;
+
+            outfile->Printf("norm_arg = norm_sum * factor = %20.12e\n", norm_arg);
+
+            assert(norm_arg > 0.0);
+
+            double norm = 1.0 / sqrt(norm_arg);
+
+            outfile->Printf("norm = %20.12e\n", norm);
+
+            ptrdiff_t uidx = offset + j;
+
+            outfile->Printf("uidx = %ld\n", static_cast<long>(uidx));
+
+            assert(uidx >= 0);
+            assert(uidx < static_cast<ptrdiff_t>(ucoefficients_.size()));
+            assert(j < static_cast<int>(l2shell.contr[0].coeff.size()));
+
+            outfile->Printf("ucoef before = %20.12e\n", ucoefficients_[uidx]);
+
+            ucoefficients_[uidx] = coef * norm;
+
+            outfile->Printf("ucoef after  = %20.12e\n", ucoefficients_[uidx]);
+
+            outfile->Printf("going to l2shell coeff assignment\n");
+
             l2shell.contr[0].coeff[j] = coef * norm;
+
+            outfile->Printf("l2shell coeff after = %20.12e\n",
+                             l2shell.contr[0].coeff[j]);
         }
     }
+
+    outfile->Printf("\nfinished apply_hermite_normalization\n");
 }
+
+//void BasisSet::apply_hermite_normalization() {
+//   outfile->Printf("starting normalization\n"); 	
+//    for (int sh = 0; sh < n_shells_; ++sh) {
+//	outfile->Printf("first loop", sh);    
+//        auto &p4shell = shells_[sh];
+//        auto &l2shell = l2_shells_[sh];
+//        assert(l2shell.ncontr() == 1);
+//
+//        int L = p4shell.am();
+//	outfile->Printf("offset \n");
+//        int offset = std::distance((const double*)&ucoefficients_, p4shell.coefs());
+//        for(int j = 0; j < p4shell.nprimitive(); j++) {
+//            outfile->Printf("second loop \n");
+//            double ex = p4shell.exp(j);
+//            double coef = p4shell.original_coef(j);
+//            double factor = sqrt(2.0) * pow(M_PI/ex, 2.5) * pow(fac[L], 2) / pow(4.0*ex, L);
+//            /* Find the normalization for the x^Ly^0z^0 term S(0,0,0), P(1,0,0) and D(2,0,0) */
+//            double norm = 0;
+//	    outfile->Printf("going to third loop \n");
+//            for(int ix=0; ix<=L/2; ix++) {
+//                for(int jx=0; jx<=L/2; jx++) {
+//		    outfile->Printf("doing denom \n");
+//                    int denom = fac[ix] * fac[jx] * fac[L-2*ix] * fac[L-2*jx] * (2*(L-ix-jx)+1);
+//                    norm = norm + pow(-1.0, ix+jx) * df[2*(L-ix-jx)] / denom;
+//                }
+//            }
+//	    outfile->Printf("going to norm it now \n");
+//            norm = 1.0 / sqrt(norm*factor);
+//	    outfile->Printf("going to ucoef it now \n");
+//	    outfile->Printf("coef = %d", coef);
+//	    outfile->Printf("norm = %d", norm);
+//            outfile->Printf("ucoef = %d", ucoefficients_[j+offset]);
+//	    ucoefficients_[j+offset] = coef * norm;
+//	    outfile->Printf("going to l3shell it now \n");
+//            l2shell.contr[0].coeff[j] = coef * norm;
+//        }
+//    }
+//}
 
 std::shared_ptr<Molecule> BasisSet::molecule() const { return molecule_; }
 
