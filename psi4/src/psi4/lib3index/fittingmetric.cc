@@ -1195,51 +1195,117 @@ void FittingMetric::form_eig_inverse_DPC() {
         }
 
         // ------------------------------------------------------------
-        // Find L-curve corner by discrete curvature on log-log scale
+        // Find L-curve corner by two-line break method on log-log scale
         // ------------------------------------------------------------
         // using cutoff_desc instead of best_idx
-        //int best_idx = 0;
-        double best_curv = -1.0;
-
-        if (soln_norm_matrix.size() >= 3) {
-            for (int k = 1; k < static_cast<int>(soln_norm_matrix.size()) - 1; ++k) {
-
-                double x1 = std::log(res_norm_matrix[k - 1]  + 1.0e-300);
-                double y1 = std::log(soln_norm_matrix[k - 1] + 1.0e-300);
-                double x2 = std::log(res_norm_matrix[k]      + 1.0e-300);
-                double y2 = std::log(soln_norm_matrix[k]     + 1.0e-300);
-                double x3 = std::log(res_norm_matrix[k + 1]  + 1.0e-300);
-                double y3 = std::log(soln_norm_matrix[k + 1] + 1.0e-300);
-
-                double ax = x2 - x1;
-                double ay = y2 - y1;
-                double bx = x3 - x2;
-                double by = y3 - y2;
-                double cx = x3 - x1;
-                double cy = y3 - y1;
-
-                double a = std::sqrt(ax * ax + ay * ay);
-                double b = std::sqrt(bx * bx + by * by);
-                double c = std::sqrt(cx * cx + cy * cy);
-
-                double area2 = std::abs(ax * cy - ay * cx);
-                double curv = 0.0;
-
-                if (a > 0.0 && b > 0.0 && c > 0.0) {
-                    curv = 2.0 * area2 / (a * b * c);
+        double best_sse = std::numeric_limits<double>::infinity();
+        
+        if (soln_norm_matrix.size() >= 6) { // at least 3 points per side
+            for (int k = 2; k <= static_cast<int>(soln_norm_matrix.size()) - 3; ++k) {
+        
+                auto fit_line_sse = [](const std::vector<double>& x,
+                                       const std::vector<double>& y,
+                                       int i0, int i1) {
+                    int n = i1 - i0 + 1;
+        
+                    double sx = 0.0, sy = 0.0, sxx = 0.0, sxy = 0.0;
+                    for (int i = i0; i <= i1; ++i) {
+                        sx  += x[i];
+                        sy  += y[i];
+                        sxx += x[i] * x[i];
+                        sxy += x[i] * y[i];
+                    }
+        
+                    double denom = n * sxx - sx * sx;
+                    double m = 0.0;
+                    double b = 0.0;
+        
+                    if (std::abs(denom) > 1.0e-14) {
+                        m = (n * sxy - sx * sy) / denom;
+                        b = (sy - m * sx) / n;
+                    } else {
+                        b = sy / n;
+                    }
+        
+                    double sse = 0.0;
+                    for (int i = i0; i <= i1; ++i) {
+                        double yfit = m * x[i] + b;
+                        double diff = y[i] - yfit;
+                        sse += diff * diff;
+                    }
+        
+                    return sse;
+                };
+        
+                std::vector<double> xlog(soln_norm_matrix.size());
+                std::vector<double> ylog(res_norm_matrix.size());
+        
+                for (int i = 0; i < static_cast<int>(soln_norm_matrix.size()); ++i) {
+                    xlog[i] = std::log(soln_norm_matrix[i] + 1.0e-300);
+                    ylog[i] = std::log(res_norm_matrix[i] + 1.0e-300);
                 }
-
-                if (curv > best_curv) {
-                    best_curv = curv;
+        
+                double sse_left  = fit_line_sse(xlog, ylog, 0, k);
+                double sse_right = fit_line_sse(xlog, ylog, k, static_cast<int>(xlog.size()) - 1);
+                double total_sse = sse_left + sse_right;
+        
+                if (total_sse < best_sse) {
+                    best_sse = total_sse;
                     cutoff_desc = k;
                 }
             }
         }
-
+        
         int k_opt = k_kept_matrix[cutoff_desc];
-        // don't need this I think, decided at the different method for hard cutoff or tol 
         epsilon_sigma = sigma_cut_matrix[cutoff_desc];
-        //double tol = sigma[cutoff_desc] * sigma[cutoff_desc + 1];
+        // double tol = sigma[cutoff_desc] * sigma[cutoff_desc + 1];
+
+        // ------------------------------------------------------------
+        // Find L-curve corner by discrete curvature on log-log scale
+        // ------------------------------------------------------------
+        // using cutoff_desc instead of best_idx
+        //int best_idx = 0;
+        //double best_curv = -1.0;
+
+        //if (soln_norm_matrix.size() >= 3) {
+        //    for (int k = 1; k < static_cast<int>(soln_norm_matrix.size()) - 1; ++k) {
+
+        //        double x1 = std::log(res_norm_matrix[k - 1]  + 1.0e-300);
+        //        double y1 = std::log(soln_norm_matrix[k - 1] + 1.0e-300);
+        //        double x2 = std::log(res_norm_matrix[k]      + 1.0e-300);
+        //        double y2 = std::log(soln_norm_matrix[k]     + 1.0e-300);
+        //        double x3 = std::log(res_norm_matrix[k + 1]  + 1.0e-300);
+        //        double y3 = std::log(soln_norm_matrix[k + 1] + 1.0e-300);
+
+        //        double ax = x2 - x1;
+        //        double ay = y2 - y1;
+        //        double bx = x3 - x2;
+        //        double by = y3 - y2;
+        //        double cx = x3 - x1;
+        //        double cy = y3 - y1;
+
+        //        double a = std::sqrt(ax * ax + ay * ay);
+        //        double b = std::sqrt(bx * bx + by * by);
+        //        double c = std::sqrt(cx * cx + cy * cy);
+
+        //        double area2 = std::abs(ax * cy - ay * cx);
+        //        double curv = 0.0;
+
+        //        if (a > 0.0 && b > 0.0 && c > 0.0) {
+        //            curv = 2.0 * area2 / (a * b * c);
+        //        }
+
+        //        if (curv > best_curv) {
+        //            best_curv = curv;
+        //            cutoff_desc = k;
+        //        }
+        //    }
+        //}
+
+        //int k_opt = k_kept_matrix[cutoff_desc];
+        //// don't need this I think, decided at the different method for hard cutoff or tol 
+        //epsilon_sigma = sigma_cut_matrix[cutoff_desc];
+        ////double tol = sigma[cutoff_desc] * sigma[cutoff_desc + 1];
 
         outfile->Printf("\n=== TSVD L-curve analysis ===\n");
 	outfile->Printf("Cutoff desc - %d\n", cutoff_desc);
