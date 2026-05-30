@@ -1019,7 +1019,8 @@ void FittingMetric::form_eig_inverse_DPC() {
     //    choose i that maximizes gap_i
     // (2) l-curve 
     //     plot the log of ||\tilde{x}||_{2} vs ||\tilde{r}||_2 
-    //     determine i based on elbow method    
+    //     determine i based on elbow method
+    // (3) turn off  
     // ============================================================
 
     int gap_method = 2;
@@ -1194,21 +1195,66 @@ void FittingMetric::form_eig_inverse_DPC() {
             sigma_cut_matrix.push_back(sigma[r - 1]);  // smallest kept sigma
         }
 
-        // ------------------------------------------------------------
-        // Find L-curve corner by two-line break method on log-log scale
-        // ------------------------------------------------------------
-        // using cutoff_desc instead of best_idx
-        double best_sse = std::numeric_limits<double>::infinity();
+
+        //------------------------------------------------------------
+	//Using different ways to identify the index within the L-curve 
+	//Method = 0
+	//----> uses two-line break
+	//Method = 1
+	//----> residual norm decreases then increase with 5 steps 
+	//Method = 2
+	//----> residual norm increases then decreases with 5 steps
+	//-----------------------------------------------------------
+        // ============================================================
+        // Choose L-curve / residual cutoff method
+        // ============================================================
+        // lcurve_method = 0 : two-line break on log(solution norm) vs log(residual norm)
+        // lcurve_method = 1 : residual increases then decreases
+        // lcurve_method = 2 : residual decreases then increases
         
-        if (soln_norm_matrix.size() >= 6) { // at least 3 points per side
-            for (int k = 2; k <= static_cast<int>(soln_norm_matrix.size()) - 3; ++k) {
+        int lcurve_method = 1;
+        
+        int cutoff_desc = 0;
+        int k_opt = 0;
+        
+        // Parameters for residual turning-point methods
+        int start_lookback = 3;
+        int start_lookahead = 3;
+        int min_window = 2;
+        double tol = 1.0e-12;
+        
+        
+        // ============================================================
+        // Method 0: two-line break method on log-log L-curve
+        // ============================================================
+        if (lcurve_method == 0) {
+        
+            // ------------------------------------------------------------
+            // Find L-curve corner by two-line break method on log-log scale
+            // ------------------------------------------------------------
+            double best_sse = std::numeric_limits<double>::infinity();
+        
+            if (soln_norm_matrix.size() >= 6) { // at least 3 points per side
+        
+                std::vector<double> xlog(soln_norm_matrix.size());
+                std::vector<double> ylog(res_norm_matrix.size());
+        
+                for (int i = 0; i < static_cast<int>(soln_norm_matrix.size()); ++i) {
+                    xlog[i] = std::log(soln_norm_matrix[i] + 1.0e-300);
+                    ylog[i] = std::log(res_norm_matrix[i] + 1.0e-300);
+                }
         
                 auto fit_line_sse = [](const std::vector<double>& x,
                                        const std::vector<double>& y,
-                                       int i0, int i1) {
+                                       int i0,
+                                       int i1) {
                     int n = i1 - i0 + 1;
         
-                    double sx = 0.0, sy = 0.0, sxx = 0.0, sxy = 0.0;
+                    double sx = 0.0;
+                    double sy = 0.0;
+                    double sxx = 0.0;
+                    double sxy = 0.0;
+        
                     for (int i = i0; i <= i1; ++i) {
                         sx  += x[i];
                         sy  += y[i];
@@ -1228,6 +1274,7 @@ void FittingMetric::form_eig_inverse_DPC() {
                     }
         
                     double sse = 0.0;
+        
                     for (int i = i0; i <= i1; ++i) {
                         double yfit = m * x[i] + b;
                         double diff = y[i] - yfit;
@@ -1237,28 +1284,180 @@ void FittingMetric::form_eig_inverse_DPC() {
                     return sse;
                 };
         
-                std::vector<double> xlog(soln_norm_matrix.size());
-                std::vector<double> ylog(res_norm_matrix.size());
+                for (int k = 2; k <= static_cast<int>(soln_norm_matrix.size()) - 3; ++k) {
         
-                for (int i = 0; i < static_cast<int>(soln_norm_matrix.size()); ++i) {
-                    xlog[i] = std::log(soln_norm_matrix[i] + 1.0e-300);
-                    ylog[i] = std::log(res_norm_matrix[i] + 1.0e-300);
+                    double sse_left = fit_line_sse(
+                        xlog,
+                        ylog,
+                        0,
+                        k
+                    );
+        
+                    double sse_right = fit_line_sse(
+                        xlog,
+                        ylog,
+                        k,
+                        static_cast<int>(xlog.size()) - 1
+                    );
+        
+                    double total_sse = sse_left + sse_right;
+        
+                    if (total_sse < best_sse) {
+                        best_sse = total_sse;
+                        cutoff_desc = k;
+                    }
+                }
+            } else {
+                throw std::runtime_error("Not enough points for two-line break L-curve method.");
+            }
+        
+            k_opt = k_kept_matrix[cutoff_desc];
+            epsilon_sigma = sigma_cut_matrix[cutoff_desc];
+        }
+
+        // ============================================================
+        // Method 1: residual increases then decreases
+        // ============================================================
+        else if (lcurve_method == 1) {
+        
+            cutoff_desc = -1;
+        
+            for (int window = std::max(start_lookback, start_lookahead);
+                 window >= min_window;
+                 --window) {
+        
+                int lookback = std::min(start_lookback, window);
+                int lookahead = std::min(start_lookahead, window);
+        
+                if (lookback < min_window || lookahead < min_window) {
+                    continue;
                 }
         
-                double sse_left  = fit_line_sse(xlog, ylog, 0, k);
-                double sse_right = fit_line_sse(xlog, ylog, k, static_cast<int>(xlog.size()) - 1);
-                double total_sse = sse_left + sse_right;
+                for (int i = lookback;
+                     i < static_cast<int>(res_norm_matrix.size()) - lookahead;
+                     ++i) {
         
-                if (total_sse < best_sse) {
-                    best_sse = total_sse;
-                    cutoff_desc = k;
+                    bool increasing_before = true;
+        
+                    for (int j = i - lookback; j < i; ++j) {
+                        if (!(res_norm_matrix[j + 1] > res_norm_matrix[j] + tol)) {
+                            increasing_before = false;
+                            break;
+                        }
+                    }
+        
+                    if (!increasing_before) {
+                        continue;
+                    }
+        
+                    bool decreasing_after = true;
+        
+                    for (int j = i; j < i + lookahead; ++j) {
+                        if (!(res_norm_matrix[j + 1] < res_norm_matrix[j] - tol)) {
+                            decreasing_after = false;
+                            break;
+                        }
+                    }
+        
+                    if (decreasing_after) {
+                        cutoff_desc = i;
+                        break;
+                    }
+                }
+        
+                if (cutoff_desc >= 0) {
+                    break;
                 }
             }
+        
+            if (cutoff_desc < 0) {
+                epsilon_sigma = 1.0e-5;
+                k_opt = -1;  // ignored when fallback epsilon is used
+            }
+            else {
+                k_opt = k_kept_matrix[cutoff_desc];
+                epsilon_sigma = sigma_cut_matrix[cutoff_desc];
+            }
+        }
+                
+        // ============================================================
+        // Method 2: residual decreases then increases
+        // ============================================================
+        else if (lcurve_method == 2) {
+        
+            cutoff_desc = -1;
+        
+            for (int window = std::max(start_lookback, start_lookahead);
+                 window >= min_window;
+                 --window) {
+        
+                int lookback = std::min(start_lookback, window);
+                int lookahead = std::min(start_lookahead, window);
+        
+                if (lookback < min_window || lookahead < min_window) {
+                    continue;
+                }
+        
+                for (int i = lookback;
+                     i < static_cast<int>(res_norm_matrix.size()) - lookahead;
+                     ++i) {
+        
+                    bool decreasing_before = true;
+        
+                    for (int j = i - lookback; j < i; ++j) {
+                        if (!(res_norm_matrix[j + 1] < res_norm_matrix[j] - tol)) {
+                            decreasing_before = false;
+                            break;
+                        }
+                    }
+        
+                    if (!decreasing_before) {
+                        continue;
+                    }
+        
+                    bool increasing_after = true;
+        
+                    for (int j = i; j < i + lookahead; ++j) {
+                        if (!(res_norm_matrix[j + 1] > res_norm_matrix[j] + tol)) {
+                            increasing_after = false;
+                            break;
+                        }
+                    }
+        
+                    if (increasing_after) {
+                        cutoff_desc = i;
+                        break;
+                    }
+                }
+        
+                if (cutoff_desc >= 0) {
+                    break;
+                }
+            }
+        
+            if (cutoff_desc < 0) {
+                epsilon_sigma = 1.0e-5;
+                k_opt = -1;  // ignored when fallback epsilon is used
+            }
+            else {
+                k_opt = k_kept_matrix[cutoff_desc];
+                epsilon_sigma = sigma_cut_matrix[cutoff_desc];
+            }
+        }	
+        
+        // ============================================================
+        // Invalid method
+        // ============================================================
+        else {
+            throw std::runtime_error("Invalid lcurve_method. Use 0, 1, or 2.");
         }
         
-        int k_opt = k_kept_matrix[cutoff_desc];
-        epsilon_sigma = sigma_cut_matrix[cutoff_desc];
-        // double tol = sigma[cutoff_desc] * sigma[cutoff_desc + 1];
+        
+        // ============================================================
+        // Optional print/debug output
+        // ============================================================
+        outfile->Printf("\nL-curve method used = %d\n", lcurve_method);
+	// double tol = sigma[cutoff_desc] * sigma[cutoff_desc + 1];
 
         // ------------------------------------------------------------
         // Find L-curve corner by discrete curvature on log-log scale
@@ -1309,7 +1508,7 @@ void FittingMetric::form_eig_inverse_DPC() {
 
         outfile->Printf("\n=== TSVD L-curve analysis ===\n");
 	outfile->Printf("Cutoff desc - %d\n", cutoff_desc);
-        outfile->Printf("Selected truncation k_opt = %d\n", k_opt);
+        //outfile->Printf("Selected truncation k_opt = %d\n", k_opt);
         outfile->Printf("Corner sigma_k = %.12e\n", epsilon_sigma);
         //outfile->Printf("Suggested eigval cutoff tol = sigma_k^2 = %.12e\n", tol);
         //outfile->Printf("Discrete curvature at corner = %.12e\n", best_curv);
@@ -1340,19 +1539,19 @@ void FittingMetric::form_eig_inverse_DPC() {
         // ------------------------------------------------------------
         // Write L-curve data to file
         // ------------------------------------------------------------
-        //std::ofstream dat("lcurve_data.txt");
-        //dat << std::setprecision(16);
-        //dat << "# idx  k_kept  residual_norm  solution_norm  sigma_k\n";
-        //for (int i = 0; i < static_cast<int>(k_kept_matrix.size()); ++i) {
-        //    dat << i << " "
-        //        << k_kept_matrix[i] << " "
-        //        << res_norm_matrix[i] << " "
-        //        << soln_norm_matrix[i] << " "
-        //        << sigma_cut_matrix[i] << "\n";
-        //}
-        //dat.close();
+       // std::ofstream dat("lcurve_data.txt");
+       // dat << std::setprecision(16);
+       // dat << "# idx  k_kept  residual_norm  solution_norm  sigma_k\n";
+       // for (int i = 0; i < static_cast<int>(k_kept_matrix.size()); ++i) {
+       //     dat << i << " "
+       //         << k_kept_matrix[i] << " "
+       //         << res_norm_matrix[i] << " "
+       //         << soln_norm_matrix[i] << " "
+       //         << sigma_cut_matrix[i] << "\n";
+       // }
+       // dat.close();
 
-        //outfile->Printf("\nWrote L-curve data to lcurve_data.txt\n");
+       // outfile->Printf("\nWrote L-curve data to lcurve_data.txt\n");
 
         // ------------------------------------------------------------
         // Write Python plotting script
@@ -1408,7 +1607,7 @@ void FittingMetric::form_eig_inverse_DPC() {
        // outfile->Printf("Wrote plotting script to lcurve_plot.py\n");
        // outfile->Printf("Run: python lcurve_plot.py\n");
     }
-
+	    
     //double epsilon_sigma = sigma_desc[cutoff_desc];
     //double tol = sigma[cutoff_desc] * sigma[cutoff_desc + 1] ;
 
@@ -1528,6 +1727,38 @@ void FittingMetric::form_eig_inverse_DPC() {
 
         outfile->Printf("\nDPC Method 2 (threshold by sigma_desc[%d]^2): kept %d / %d modes (ratio = %.6f)\n",
                         cutoff_desc, nkept, naux, trunc_ratio);
+    } else if (gap_method=3){
+        // --------------------------------------------------------
+        // METHOD 3:
+        // Use tol = 10^-10, then keep eigval >= tol
+        // --------------------------------------------------------
+        double tol = 10^-10;
+        outfile->Printf("\n tol = %.12e\n", tol);
+        for (int i = 0; i < naux; ++i) {
+            if (eigval[i] >= tol) ++nkept;
+            outfile->Printf("\n count = %d, %.12e\n", i, eigval[i]);
+        }
+
+        const double trunc_ratio =
+            static_cast<double>(nkept) / static_cast<double>(naux);
+
+        for (int i = 0; i < naux; i++) {
+            if (eigval[i] >= tol) {
+                double inv_sqrt = 1.0 / std::sqrt(eigval[i]);
+                for (int r = 0; r < naux; r++) {
+                    for (int c = 0; c < naux; c++) {
+                        (*metric_)(r, c) += metric_flat[r + i * naux] *
+                                            inv_sqrt *
+                                            metric_flat[c + i * naux];
+                    }
+                }
+            }
+        }
+
+        outfile->Printf("\nDPC Method 2 (threshold by sigma_desc[%d]^2): kept %d / %d modes (ratio = %.6f)\n",
+                        cutoff_desc, nkept, naux, trunc_ratio);
+    
+    
     } else {
         throw std::runtime_error("Invalid cutoff_method: choose 1 or 2");
     }
